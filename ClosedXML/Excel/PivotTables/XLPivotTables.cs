@@ -31,7 +31,7 @@ namespace ClosedXML.Excel
             var pivotTable = new XLPivotTable(Worksheet, (XLPivotCache)pivotCache)
             {
                 Name = name,
-                Area = new XLSheetRange(XLSheetPoint.FromAddress(targetCell.Address)),
+                Area = new Area(Point.FromAddress(targetCell.Address)),
             };
             Add(pivotTable);
             pivotTable.UpdateCacheFields(Array.Empty<string>());
@@ -40,7 +40,7 @@ namespace ClosedXML.Excel
 
         public IXLPivotTable Add(string name, IXLCell targetCell, IXLRange range)
         {
-            var area = XLBookArea.From(range);
+            var area = SheetArea.From(range);
             var pivotCaches = Worksheet.Workbook.PivotCachesInternal;
             var existingPivotCache = pivotCaches.Find(area);
             var pivotCache = existingPivotCache ?? pivotCaches.Add(area);

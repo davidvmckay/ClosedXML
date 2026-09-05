@@ -42,7 +42,7 @@ public class PartStructureException : Exception
     /// </summary>
     public static Exception ExpectedChoiceElementNotFound(XmlTreeReader reader)
     {
-        return new PartStructureException($"The structure of XML expected an element from choice of several, but found {reader.ElementName} instead.", reader);
+        return new PartStructureException($"The structure of XML expected an element from choice of several, but found {reader.ElementName} instead", reader);
     }
 
     /// <summary>
@@ -147,11 +147,16 @@ public class PartStructureException : Exception
         return new PartStructureException($"The value of attribute '{attributeValue}' is not valid value for the attribute.");
     }
 
+    internal static PartStructureException MceError(LineInfo lineInfo, string message)
+    {
+        return new PartStructureException($"MCE({lineInfo.LineNumber},{lineInfo.LinePosition}): {message}");
+    }
 
     private static string BuildMessage(string message, XmlTreeReader? reader)
     {
-        if (reader is not null && reader.TryGetLineInfo(out var lineInfo))
+        if (reader is not null)
         {
+            var lineInfo = reader.LineInfo;
             message += $" Line:{lineInfo.LineNumber}, Position:{lineInfo.LinePosition}.";
         }
 

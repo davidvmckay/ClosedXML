@@ -1,4 +1,5 @@
-﻿using ClosedXML.Excel;
+using System;
+using ClosedXML.Excel;
 using NUnit.Framework;
 using System.Globalization;
 using System.IO;
@@ -13,16 +14,10 @@ namespace ClosedXML.Tests.Excel.ConditionalFormats
         [Test]
         public void MaintainConditionalFormattingOrder()
         {
-            using (var stream = TestHelper.GetStreamFromResource(TestHelper.GetResourcePath(@"Other\StyleReferenceFiles\ConditionalFormattingOrder\inputfile.xlsx")))
-            using (var ms = new MemoryStream())
-            {
-                TestHelper.CreateAndCompare(() =>
-                {
-                    var wb = new XLWorkbook(stream);
-                    wb.SaveAs(ms);
-                    return wb;
-                }, @"Other\StyleReferenceFiles\ConditionalFormattingOrder\ConditionalFormattingOrder.xlsx");
-            }
+            // The input file contains duplicates of same dxf and thus the output also contains some duplicate dxf.
+            TestHelper.LoadSaveAndCompare(
+                @"Other\StyleReferenceFiles\ConditionalFormattingOrder\inputfile.xlsx",
+                @"Other\StyleReferenceFiles\ConditionalFormattingOrder\ConditionalFormattingOrder.xlsx");
         }
 
         [TestCase(true, 7)]
@@ -157,6 +152,81 @@ namespace ClosedXML.Tests.Excel.ConditionalFormats
                 var cf = ws.ConditionalFormats.Single(cf => cf.ConditionalFormatType == XLConditionalFormatType.Expression && cf.Range.RangeAddress.ToString() == range);
                 Assert.AreEqual(1, cf.Values.Count);
                 CollectionAssert.AreEqual(expectedFormula, cf.Values[1].Value);
+            }
+        }
+
+        [Test]
+        public void Range_setter_throws_on_range_from_different_worksheet()
+        {
+            using var wb = new XLWorkbook();
+            var ws1 = wb.AddWorksheet();
+            var cf = ws1.Range("A1").AddConditionalFormat();
+            var ws2 = wb.AddWorksheet();
+            var differentSheetRange = ws2.Range("B5");
+
+            Assert.Throws<ArgumentException>(() => cf.Range = differentSheetRange);
+        }
+
+        [Test]
+        public void Ranges_setter_throws_on_range_from_different_worksheet()
+        {
+            using var wb = new XLWorkbook();
+            var ws1 = wb.AddWorksheet();
+            var cf = ws1.Range("A1").AddConditionalFormat();
+
+            var ranges = ws1.Ranges("B1");
+            var differentSheetRange = wb.AddWorksheet().Range("C1");
+            ranges.Add(differentSheetRange);
+
+            Assert.That(() => cf.Ranges = ranges, Throws.TypeOf<ArgumentException>().With.Message.Contains("must be from worksheet"));
+        }
+
+        [Test]
+        public void Ranges_setter_throws_on_empty_ranges()
+        {
+            using var wb = new XLWorkbook();
+            var ws1 = wb.AddWorksheet();
+            var cf = ws1.Range("A1").AddConditionalFormat();
+
+            var emptyRanges = ws1.Ranges("");
+
+            Assert.That(() => cf.Ranges = emptyRanges, Throws.TypeOf<ArgumentException>().With.Message.Contains("empty"));
+        }
+
+        [Test]
+        public void Text_formats_are_loaded_as_value()
+        {
+            // Issue #2690: Ensure that CF for text are loaded as a value and not as a formula.
+            TestHelper.CreateSaveLoadAssert(
+                (_, ws) =>
+                {
+                    ws.AddConditionalFormat().WhenContains("Contains")
+                        .Fill.SetBackgroundColor(XLColor.Red);
+
+                    ws.AddConditionalFormat().WhenNotContains("Not Contains")
+                        .Fill.SetBackgroundColor(XLColor.Green);
+
+                    ws.AddConditionalFormat().WhenStartsWith("Starts With")
+                        .Fill.SetBackgroundColor(XLColor.Blue);
+
+                    ws.AddConditionalFormat().WhenEndsWith("Ends With")
+                        .Fill.SetBackgroundColor(XLColor.Black);
+                },
+                (_, ws) =>
+                {
+                    AssertTextCfValue(ws, XLConditionalFormatType.ContainsText, "Contains");
+                    AssertTextCfValue(ws, XLConditionalFormatType.NotContainsText, "Not Contains");
+                    AssertTextCfValue(ws, XLConditionalFormatType.StartsWith, "Starts With");
+                    AssertTextCfValue(ws, XLConditionalFormatType.EndsWith, "Ends With");
+                });
+            return;
+
+            static void AssertTextCfValue(IXLWorksheet ws, XLConditionalFormatType type, string text)
+            {
+                var cf = ws.ConditionalFormats.Single(x => x.ConditionalFormatType == type);
+                Assert.AreEqual(1, cf.Values.Count);
+                Assert.AreEqual(text, cf.Values[1].Value);
+                Assert.IsFalse(cf.Values[1].IsFormula);
             }
         }
     }

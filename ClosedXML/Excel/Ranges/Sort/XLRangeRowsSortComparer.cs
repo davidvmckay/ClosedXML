@@ -20,7 +20,7 @@ namespace ClosedXML.Excel
         private readonly List<(int ColumnNumber, XLCellValueSortComparer Comparer)> _columnComparers;
         private readonly ValueSlice _valueSlice;
 
-        internal XLRangeRowsSortComparer(XLWorksheet sheet, XLSheetRange sortRange, IXLSortElements sortColumns)
+        internal XLRangeRowsSortComparer(XLWorksheet sheet, Area sortRange, IXLSortElements sortColumns)
         {
             if (!sortColumns.Any())
                 throw new ArgumentException("Empty sort specification.");
@@ -36,8 +36,8 @@ namespace ClosedXML.Excel
         {
             foreach (var (columnNumber, comparer) in _columnComparers)
             {
-                var row1 = _valueSlice.GetCellValue(new XLSheetPoint(rowNumber1, columnNumber));
-                var row2 = _valueSlice.GetCellValue(new XLSheetPoint(rowNumber2, columnNumber));
+                var row1 = _valueSlice.GetCellValue(new Point(rowNumber1, columnNumber));
+                var row2 = _valueSlice.GetCellValue(new Point(rowNumber2, columnNumber));
                 var comparison = comparer.Compare(row1, row2);
                 if (comparison != 0)
                     return comparison;

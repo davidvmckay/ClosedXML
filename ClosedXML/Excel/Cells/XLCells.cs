@@ -5,30 +5,20 @@ using System.Linq;
 
 namespace ClosedXML.Excel;
 
-internal class XLCells :
-#if !STYLES_REWORK
-    XLStylizedBase,
-#endif
-    IXLCells, IEnumerable<XLCell>
+internal class XLCells : IXLCells, IEnumerable<XLCell>
 {
     private readonly XLWorkbook _workbook;
     private readonly List<XLRangeAddress> _rangeAddresses = new();
     private readonly bool _usedCellsOnly;
-    private readonly Func<IXLCell, Boolean> _predicate;
+    private readonly Func<XLCell, Boolean> _predicate;
     private readonly XLCellsUsedOptions _options;
-#if !STYLES_REWORK
-    private bool _styleInitialized = false;
-#endif
 
-    public XLCells(XLWorksheet worksheet, bool usedCellsOnly, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
+    public XLCells(XLWorksheet worksheet, bool usedCellsOnly, XLCellsUsedOptions options, Func<XLCell, Boolean>? predicate = null)
         : this(worksheet.Workbook, usedCellsOnly, options, predicate)
     {
     }
 
-    public XLCells(XLWorkbook workbook, bool usedCellsOnly, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
-#if !STYLES_REWORK
-        : base(XLStyle.Default.Value)
-#endif
+    public XLCells(XLWorkbook workbook, bool usedCellsOnly, XLCellsUsedOptions options, Func<XLCell, Boolean>? predicate = null)
     {
         _workbook = workbook;
         _usedCellsOnly = usedCellsOnly;
@@ -55,7 +45,7 @@ internal class XLCells :
         }
     }
 
-    private IEnumerable<XLSheetPoint> GetAllCellsInRange(IXLRangeAddress rangeAddress)
+    private IEnumerable<Point> GetAllCellsInRange(IXLRangeAddress rangeAddress)
     {
         if (!rangeAddress.IsValid)
             yield break;
@@ -70,7 +60,7 @@ internal class XLCells :
         {
             for (var co = minColumn; co <= maxColumn; co++)
             {
-                yield return new XLSheetPoint(ro, co);
+                yield return new Point(ro, co);
             }
         }
     }
@@ -100,7 +90,7 @@ internal class XLCells :
         }
     }
 
-    private IEnumerable<XLCell> GetUsedCellsInRange(XLRangeAddress rangeAddress, XLWorksheet worksheet, IEnumerable<XLSheetPoint> usedCellsCandidates)
+    private IEnumerable<XLCell> GetUsedCellsInRange(XLRangeAddress rangeAddress, XLWorksheet worksheet, IEnumerable<Point> usedCellsCandidates)
     {
         if (!rangeAddress.IsValid)
             yield break;
@@ -132,9 +122,9 @@ internal class XLCells :
         }
     }
 
-    private IEnumerable<XLSheetPoint> GetUsedCellsCandidates(XLWorksheet worksheet)
+    private IEnumerable<Point> GetUsedCellsCandidates(XLWorksheet worksheet)
     {
-        var candidates = Enumerable.Empty<XLSheetPoint>();
+        var candidates = Enumerable.Empty<Point>();
 
         if (_options == XLCellsUsedOptions.AllContents)
         {
@@ -143,19 +133,19 @@ internal class XLCells :
 
         if (_options.HasFlag(XLCellsUsedOptions.MergedRanges))
             candidates = candidates.Union(
-                worksheet.Internals.MergedRanges.SelectMany(r => GetAllCellsInRange(r.RangeAddress)));
+                worksheet.Internals.MergedRanges.SelectMany<XLRange, Point>(r => GetAllCellsInRange(r.RangeAddress)));
 
         if (_options.HasFlag(XLCellsUsedOptions.ConditionalFormats))
             candidates = candidates.Union(
-                worksheet.ConditionalFormats.SelectMany(cf => cf.Ranges.SelectMany(r => GetAllCellsInRange(r.RangeAddress))));
+                worksheet.ConditionalFormats.SelectMany<XLConditionalFormat, Point>(cf => cf.Ranges.SelectMany(r => GetAllCellsInRange(r.RangeAddress))));
 
         if (_options.HasFlag(XLCellsUsedOptions.DataValidation))
             candidates = candidates.Union(
-                worksheet.DataValidations.SelectMany<XLDataValidation, XLSheetPoint>(dv => dv.Ranges.SelectMany(r => GetAllCellsInRange(r.RangeAddress))));
+                worksheet.DataValidations.SelectMany<XLDataValidation, Point>(dv => dv.Ranges.SelectMany(r => GetAllCellsInRange(r.RangeAddress))));
 
         if (_options.HasFlag(XLCellsUsedOptions.Sparklines))
             candidates = candidates.Union(
-                worksheet.SparklineGroups.SelectMany(sg => sg).Select(sl => XLSheetPoint.FromAddress(sl.Location.Address)));
+                worksheet.SparklineGroups.SelectMany(sg => sg).Select(sl => Point.FromAddress(sl.Location.Address)));
 
         return candidates.Distinct();
     }
@@ -215,14 +205,12 @@ internal class XLCells :
         set { this.ForEach<XLCell>(c => c.FormulaR1C1 = value); }
     }
 
-#if STYLES_REWORK
     public IXLStyle Style
     {
         get => Format;
         set => Format.SetStyle(value);
     }
 
-#endif
     internal XLCellFormat Format
     {
         get
@@ -230,51 +218,16 @@ internal class XLCells :
             // For backwards compatibility, the sheet is considered the inner style. A terrible
             // choice, but it is what it is.
             var sheet = _rangeAddresses.Select(x => x.Worksheet).FirstOrDefault(x => x is not null);
-            var areas = _rangeAddresses.Select(XLBookArea.From).ToArray();
+            var areas = _rangeAddresses.Select(SheetArea.From).ToArray();
             return XLCellFormat.ForCells(_workbook, areas, sheet);
         }
     }
-#endregion IXLCells Members
 
-#if !STYLES_REWORK
-    #region IXLStylized Members
+    #endregion IXLCells Members
 
-    protected override IEnumerable<XLStylizedBase> Children
-    {
-        get
-        {
-            foreach (XLCell c in this)
-                yield return c;
-        }
-    }
-
-    public override IEnumerable<IXLRange> RangesUsed
-    {
-        get
-        {
-            var retVal = new XLRanges(_workbook);
-            this.ForEach<XLCell>(c => retVal.Add(c.AsRange()));
-            return retVal;
-        }
-    }
-
-    #endregion IXLStylized Members
-#endif
     public void Add(XLRangeAddress rangeAddress)
     {
         _rangeAddresses.Add(rangeAddress);
-
-#if !STYLES_REWORK
-        if (_styleInitialized)
-            return;
-
-        var worksheetStyle = rangeAddress.Worksheet?.Style;
-        if (worksheetStyle == null)
-            return;
-
-        InnerStyle = worksheetStyle;
-        _styleInitialized = true;
-#endif
     }
 
     public void Add(XLCell cell)

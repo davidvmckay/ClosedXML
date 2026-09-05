@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace ClosedXML.Excel;
 
+/// <summary>
+/// An API object to modify number format of a <see cref="XLCellFormat">cell format</see>.
+/// </summary>
 internal sealed partial class XLNumberCellFormat
 {
     private readonly XLCellFormat _parent;
@@ -28,7 +31,7 @@ internal sealed partial class XLNumberCellFormat
         }
     }
 
-    private string Format
+    private XLNumberFormat Format
     {
         get => _parent.Resolve(static x => x.NumberFormat);
         set => _parent.ModifyNumberFormat(value);
@@ -46,6 +49,6 @@ internal sealed partial class XLNumberCellFormat
 
     internal void SetNumberFormat(string numberFormat)
     {
-        Format = numberFormat;
+        Format = XLNumberFormat.Parse(numberFormat);
     }
 }

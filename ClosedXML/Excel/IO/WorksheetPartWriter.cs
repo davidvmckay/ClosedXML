@@ -360,7 +360,7 @@ namespace ClosedXML.Excel.IO
 
             #region Columns
 
-            var worksheetStyleId = context.GetStyleId(xlWorksheet.StyleValue, xlWorksheet.FormatValue);
+            var worksheetStyleId = context.GetStyleId(xlWorksheet.FormatValue);
             if (xlWorksheet.Internals.CellsCollection.IsEmpty &&
                 xlWorksheet.Internals.ColumnsCollection.Count == 0
                 && worksheetStyleId == 0)
@@ -421,7 +421,7 @@ namespace ClosedXML.Excel.IO
                     var outlineLevel = 0;
                     if (xlWorksheet.Internals.ColumnsCollection.TryGetValue(co, out XLColumn col))
                     {
-                        styleId = context.GetStyleId(col.StyleValue, col.FormatValue);
+                        styleId = col.FormatValue is null ? worksheetStyleId : context.GetStyleId(col.FormatValue);
                         columnWidth = GetColumnWidth(col.Width).SaveRound();
                         isHidden = col.IsHidden;
                         collapsed = col.Collapsed;
@@ -591,7 +591,7 @@ namespace ClosedXML.Excel.IO
 
             #region MergeCells
 
-            if ((xlWorksheet).Internals.MergedRanges.Any())
+            if (xlWorksheet.Internals.MergedRanges.Count > 0)
             {
                 if (!worksheet.Elements<MergeCells>().Any())
                 {
@@ -603,7 +603,7 @@ namespace ClosedXML.Excel.IO
                 cm.SetElement(XLWorksheetContents.MergeCells, mergeCells);
                 mergeCells.RemoveAllChildren<MergeCell>();
 
-                foreach (var mergeCell in (xlWorksheet).Internals.MergedRanges.Select(
+                foreach (var mergeCell in xlWorksheet.Internals.MergedRanges.Select<XLRange, string>(
                     m => m.RangeAddress.FirstAddress.ToString() + ":" + m.RangeAddress.LastAddress.ToString()).Select(
                         merged => new MergeCell { Reference = merged }))
                     mergeCells.AppendChild(mergeCell);
@@ -673,7 +673,7 @@ namespace ClosedXML.Excel.IO
                 }
             }
 
-            var exlst = xlWorksheet.ConditionalFormats.Where(c => c.ConditionalFormatType == XLConditionalFormatType.DataBar).ToArray();
+            var exlst = xlWorksheet.ConditionalFormats.Where<XLConditionalFormat>(c => c.ConditionalFormatType == XLConditionalFormatType.DataBar).ToArray();
             if (exlst.Any())
             {
                 if (!worksheet.Elements<WorksheetExtensionList>().Any())
@@ -781,10 +781,10 @@ namespace ClosedXML.Excel.IO
                     sparklineGroups.RemoveAllChildren();
                 }
 
-                foreach (var xlSparklineGroup in xlWorksheet.SparklineGroups)
+                foreach (var xlSparklineGroup in xlWorksheet.SparklineGroupsInternal)
                 {
                     // Do not create an empty Sparkline group
-                    if (!xlSparklineGroup.Any())
+                    if (!xlSparklineGroup.Sparklines.Any())
                         continue;
 
                     var sparklineGroup = new X14.SparklineGroup();
@@ -826,12 +826,12 @@ namespace ClosedXML.Excel.IO
                     if (xlSparklineGroup.VerticalAxis.MaxAxisType == XLSparklineAxisMinMax.Custom)
                         sparklineGroup.ManualMax = xlSparklineGroup.VerticalAxis.ManualMax;
 
-                    var sparklines = new X14.Sparklines(xlSparklineGroup
+                    var sparklines = new X14.Sparklines(xlSparklineGroup.Sparklines
                         .Select(xlSparkline => new X14.Sparkline
                         {
-                            Formula = new OfficeExcel.Formula(xlSparkline.SourceData.RangeAddress.ToString(XLReferenceStyle.A1, true)),
-                            ReferenceSequence =
-                                    new OfficeExcel.ReferenceSequence(xlSparkline.Location.Address.ToString())
+                            // When sparkline source data area is deleted, Excel shows it as #REF! and is saved in file as an empty string
+                            Formula = new OfficeExcel.Formula(xlSparkline.SourceDataFormula ?? string.Empty),
+                            ReferenceSequence = new OfficeExcel.ReferenceSequence(xlSparkline.Location.ToString())
                         })
                         );
 
@@ -1328,11 +1328,11 @@ namespace ClosedXML.Excel.IO
                 AddPictureAnchor(worksheetPart, pic, context);
             }
 
-            if (xlWorksheet.Pictures.Any())
+            if (xlWorksheet.Pictures.Count > 0)
                 RebaseNonVisualDrawingPropertiesIds(worksheetPart);
 
             var tableParts = worksheet.Elements<TableParts>().First();
-            if (xlWorksheet.Pictures.Any() && !worksheet.OfType<Drawing>().Any())
+            if (xlWorksheet.Pictures.Count > 0 && !worksheet.OfType<Drawing>().Any())
             {
                 var worksheetDrawing = new Drawing { Id = worksheetPart.GetIdOfPart(worksheetPart.DrawingsPart) };
                 worksheetDrawing.AddNamespaceDeclaration("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
@@ -1344,7 +1344,7 @@ namespace ClosedXML.Excel.IO
             var hasCharts = worksheetPart.DrawingsPart is not null && worksheetPart.DrawingsPart.Parts.Any();
             if (worksheetPart.DrawingsPart is not null && // There is a drawing part for the sheet that could be deleted
                 xlWorksheet.LegacyDrawingId is null && // and sheet doesn't contain any form controls or comments or other shapes
-                !xlWorksheet.Pictures.Any() && // and also no pictures.
+                xlWorksheet.Pictures.Count == 0 && // and also no pictures.
                 !hasCharts) // and no charts
             {
                 var id = worksheetPart.GetIdOfPart(worksheetPart.DrawingsPart);
@@ -2016,7 +2016,7 @@ namespace ClosedXML.Excel.IO
             uint rowStyleId = 0;
             foreach (var xlCell in xlWorksheet.Internals.CellsCollection.GetCells())
             {
-                var currentRowNumber = xlCell.SheetPoint.Row;
+                var currentRowNumber = xlCell.Point.Row;
 
                 // A space between cells can have several rows that don't contain cells,
                 // but have custom properties (e.g. height). Write them out.
@@ -2060,7 +2060,7 @@ namespace ClosedXML.Excel.IO
                     if (xlWorksheet.Internals.RowsCollection.TryGetValue(currentRowNumber, out var row))
                     {
                         rowPropIndex++;
-                        rowStyleId = context.GetStyleId(row.StyleValue, row.FormatValue);
+                        rowStyleId = context.GetStyleId(row.FormatValue);
                     }
                     else
                     {
@@ -2099,8 +2099,7 @@ namespace ClosedXML.Excel.IO
             {
                 return xlRow.HeightChanged ||
                     xlRow.IsHidden ||
-                    xlRow.StyleValue != xlRow.Worksheet.StyleValue ||
-                    xlRow.FormatValue is not null && xlRow.FormatValue != xlRow.Worksheet.Workbook.Styles.DefaultFormat ||
+                    xlRow.FormatValue is not null ||
                     xlRow.Collapsed ||
                     xlRow.OutlineLevel > 0;
             }
@@ -2140,16 +2139,10 @@ namespace ClosedXML.Excel.IO
                     w.WriteAttributeString("hidden", TrueValue);
                 }
 
-                var rowHasCustomFormat =
-#if STYLES_REWORK
-                    xlRow.FormatValue is not null && xlRow.FormatValue != xlRow.Worksheet.Workbook.Styles.DefaultFormat;
-#else
-                    xlRow.StyleValue != xlRow.Worksheet.StyleValue;
-#endif
-
+                var rowHasCustomFormat = xlRow.FormatValue is not null;
                 if (rowHasCustomFormat)
                 {
-                    var formatIndex = context.GetStyleId(xlRow.StyleValue, xlRow.FormatValue);
+                    var formatIndex = context.GetStyleId(xlRow.FormatValue);
                     w.WriteAttribute("s", formatIndex);
                     w.WriteAttributeString("customFormat", TrueValue);
                 }
@@ -2206,10 +2199,10 @@ namespace ClosedXML.Excel.IO
 
             static void WriteCell(XmlWriter xml, XLCell xlCell, char[] cellRef, SaveContext context, SaveOptions options, HashSet<IXLAddress> tableTotalCells, uint rowStyleId)
             {
-                var styleId = context.GetStyleId(xlCell.StyleValue, xlCell.FormatValue);
+                var styleId = context.GetStyleId(xlCell.GetFormat());
 
                 Span<Char> cellRefSpan = cellRef;
-                var cellRefLen = xlCell.SheetPoint.Format(cellRefSpan);
+                var cellRefLen = xlCell.Point.Format(cellRefSpan);
 
                 if (xlCell.HasFormula)
                 {
@@ -2267,7 +2260,7 @@ namespace ClosedXML.Excel.IO
                     }
                     else if (xlCell.HasArrayFormula)
                     {
-                        var isMasterCell = xlCell.Formula.Range.FirstPoint == xlCell.SheetPoint;
+                        var isMasterCell = xlCell.Formula.Range.FirstPoint == xlCell.Point;
                         if (isMasterCell)
                         {
                             xml.WriteStartElement("f", Main2006SsNs);

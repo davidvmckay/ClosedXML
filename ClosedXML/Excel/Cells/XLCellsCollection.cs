@@ -82,28 +82,28 @@ namespace ClosedXML.Excel
 
         internal void Clear()
         {
-            Clear(XLSheetRange.Full);
+            Clear(Area.Full);
         }
 
-        internal void Clear(XLSheetRange clearRange)
+        internal void Clear(Area clearRange)
         {
             foreach (var slice in _slices)
                 slice.Clear(clearRange);
         }
 
-        internal void DeleteAreaAndShiftLeft(XLSheetRange rangeToDelete)
+        internal void DeleteAreaAndShiftLeft(Area rangeToDelete)
         {
             foreach (var slice in _slices)
                 slice.DeleteAreaAndShiftLeft(rangeToDelete);
         }
 
-        internal void DeleteAreaAndShiftUp(XLSheetRange rangeToDelete)
+        internal void DeleteAreaAndShiftUp(Area rangeToDelete)
         {
             foreach (var slice in _slices)
                 slice.DeleteAreaAndShiftUp(rangeToDelete);
         }
 
-        internal XLCell GetCell(XLSheetPoint address)
+        internal XLCell GetCell(Point address)
         {
             return new XLCell(_ws, address);
         }
@@ -113,7 +113,7 @@ namespace ClosedXML.Excel
         /// </summary>
         internal IEnumerable<XLCell> GetCells()
         {
-            return GetCells(XLSheetRange.Full);
+            return GetCells(Area.Full);
         }
 
         /// <summary>
@@ -121,7 +121,7 @@ namespace ClosedXML.Excel
         /// </summary>
         internal IEnumerable<XLCell> GetCells(Func<XLCell, Boolean> predicate)
         {
-            return GetCells(XLSheetRange.Full, predicate);
+            return GetCells(Area.Full, predicate);
         }
 
         /// <summary>
@@ -131,13 +131,13 @@ namespace ClosedXML.Excel
                                             Int32 rowEnd, Int32 columnEnd,
                                             Func<XLCell, Boolean>? predicate = null)
         {
-            return GetCells(new XLSheetRange(rowStart, columnStart, rowEnd, columnEnd), predicate);
+            return GetCells(new Area(rowStart, columnStart, rowEnd, columnEnd), predicate);
         }
 
         /// <summary>
         /// Get all used cells in the range that satisfy the predicate.
         /// </summary>
-        internal IEnumerable<XLCell> GetCells(XLSheetRange range, Func<XLCell, Boolean>? predicate = null)
+        internal IEnumerable<XLCell> GetCells(Area range, Func<XLCell, Boolean>? predicate = null)
         {
             var enumerator = new SlicesEnumerator(range, this);
 
@@ -163,7 +163,7 @@ namespace ClosedXML.Excel
         /// <summary>
         /// Get cell or null, if cell is not used.
         /// </summary>
-        internal XLCell? GetUsedCell(XLSheetPoint address)
+        internal XLCell? GetUsedCell(Point address)
         {
             if (!IsUsed(address))
                 return null;
@@ -171,34 +171,34 @@ namespace ClosedXML.Excel
             return GetCell(address);
         }
 
-        internal int FirstColumnUsed(XLSheetRange searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
+        internal int FirstColumnUsed(Area searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
         {
             return FindUsedColumn(searchRange, options, predicate, false);
         }
 
-        internal int FirstRowUsed(XLSheetRange searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
+        internal int FirstRowUsed(Area searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
         {
             return FindUsedRow(searchRange, options, predicate, false);
         }
 
-        internal void InsertAreaAndShiftDown(XLSheetRange insertedRange)
+        internal void InsertAreaAndShiftDown(Area insertedRange)
         {
             foreach (var slice in _slices)
                 slice.InsertAreaAndShiftDown(insertedRange);
         }
 
-        internal void InsertAreaAndShiftRight(XLSheetRange insertedRange)
+        internal void InsertAreaAndShiftRight(Area insertedRange)
         {
             foreach (var slice in _slices)
                 slice.InsertAreaAndShiftRight(insertedRange);
         }
 
-        internal int LastColumnUsed(XLSheetRange searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
+        internal int LastColumnUsed(Area searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
         {
             return FindUsedColumn(searchRange, options, predicate, true);
         }
 
-        internal int LastRowUsed(XLSheetRange searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
+        internal int LastRowUsed(Area searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate = null)
         {
             return FindUsedRow(searchRange, options, predicate, true);
         }
@@ -208,18 +208,18 @@ namespace ClosedXML.Excel
         /// </summary>
         /// <param name="map">A sorted map of rows. The values must be resorted row numbers from <paramref name="sheetRange"/>.</param>
         /// <param name="sheetRange">Sheet that should have its rows rearranged.</param>
-        internal void RemapRows(IList<int> map, XLSheetRange sheetRange)
+        internal void RemapRows(IList<int> map, Area sheetRange)
         {
             RemapRanges(map, sheetRange.TopRow, SwapRows);
 
             void SwapRows(int prevRowNumber, int currentRowNumber)
             {
-                var prevRowRange = new XLSheetRange(
-                    new XLSheetPoint(prevRowNumber, sheetRange.LeftColumn),
-                    new XLSheetPoint(prevRowNumber, sheetRange.RightColumn));
-                var currentRowRange = new XLSheetRange(
-                    new XLSheetPoint(currentRowNumber, sheetRange.LeftColumn),
-                    new XLSheetPoint(currentRowNumber, sheetRange.RightColumn));
+                var prevRowRange = new Area(
+                    new Point(prevRowNumber, sheetRange.LeftColumn),
+                    new Point(prevRowNumber, sheetRange.RightColumn));
+                var currentRowRange = new Area(
+                    new Point(currentRowNumber, sheetRange.LeftColumn),
+                    new Point(currentRowNumber, sheetRange.RightColumn));
                 SwapRanges(prevRowRange, currentRowRange);
             }
         }
@@ -229,18 +229,18 @@ namespace ClosedXML.Excel
         /// </summary>
         /// <param name="map">A sorted map of columns. The values must be resorted columns numbers from <paramref name="sheetRange"/>.</param>
         /// <param name="sheetRange">Sheet that should have its columns rearranged.</param>
-        internal void RemapColumns(IList<int> map, XLSheetRange sheetRange)
+        internal void RemapColumns(IList<int> map, Area sheetRange)
         {
             RemapRanges(map, sheetRange.LeftColumn, SwapColumns);
 
             void SwapColumns(int prevColNumber, int currentColNumber)
             {
-                var prevRowRange = new XLSheetRange(
-                    new XLSheetPoint(sheetRange.TopRow, prevColNumber),
-                    new XLSheetPoint(sheetRange.BottomRow, prevColNumber));
-                var currentRowRange = new XLSheetRange(
-                    new XLSheetPoint(sheetRange.TopRow, currentColNumber),
-                    new XLSheetPoint(sheetRange.BottomRow, currentColNumber));
+                var prevRowRange = new Area(
+                    new Point(sheetRange.TopRow, prevColNumber),
+                    new Point(sheetRange.BottomRow, prevColNumber));
+                var currentRowRange = new Area(
+                    new Point(sheetRange.TopRow, currentColNumber),
+                    new Point(sheetRange.BottomRow, currentColNumber));
                 SwapRanges(prevRowRange, currentRowRange);
             }
         }
@@ -281,7 +281,7 @@ namespace ClosedXML.Excel
             }
         }
 
-        private void SwapRanges(XLSheetRange sheetRange1, XLSheetRange sheetRange2)
+        private void SwapRanges(Area sheetRange1, Area sheetRange2)
         {
             var rowCount = sheetRange1.LastPoint.Row - sheetRange1.FirstPoint.Row + 1;
             var columnCount = sheetRange1.LastPoint.Column - sheetRange1.FirstPoint.Column + 1;
@@ -289,15 +289,15 @@ namespace ClosedXML.Excel
             {
                 for (var column = 0; column < columnCount; column++)
                 {
-                    var sp1 = new XLSheetPoint(sheetRange1.FirstPoint.Row + row, sheetRange1.FirstPoint.Column + column);
-                    var sp2 = new XLSheetPoint(sheetRange2.FirstPoint.Row + row, sheetRange2.FirstPoint.Column + column);
+                    var sp1 = new Point(sheetRange1.FirstPoint.Row + row, sheetRange1.FirstPoint.Column + column);
+                    var sp2 = new Point(sheetRange2.FirstPoint.Row + row, sheetRange2.FirstPoint.Column + column);
 
                     SwapCellsContent(sp1, sp2);
                 }
             }
         }
 
-        private int FindUsedColumn(XLSheetRange range, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate, bool descending)
+        private int FindUsedColumn(Area range, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate, bool descending)
         {
             var usedColumns = Enumerable.Empty<int>();
             foreach (var slice in _slices)
@@ -312,7 +312,7 @@ namespace ClosedXML.Excel
 
             foreach (var columnNumber in usedColumns)
             {
-                var enumerator = new SlicesEnumerator(new XLSheetRange(range.FirstPoint.Row, columnNumber, range.LastPoint.Row, columnNumber), this);
+                var enumerator = new SlicesEnumerator(new Area(range.FirstPoint.Row, columnNumber, range.LastPoint.Row, columnNumber), this);
                 while (enumerator.MoveNext())
                 {
                     var cell = new XLCell(_ws, enumerator.Current);
@@ -327,7 +327,7 @@ namespace ClosedXML.Excel
             return 0;
         }
 
-        private int FindUsedRow(XLSheetRange searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate, bool reverse)
+        private int FindUsedRow(Area searchRange, XLCellsUsedOptions options, Func<IXLCell, Boolean>? predicate, bool reverse)
         {
             var enumerator = new SlicesEnumerator(searchRange, this, reverse);
 
@@ -343,7 +343,7 @@ namespace ClosedXML.Excel
             return 0;
         }
 
-        private bool IsUsed(XLSheetPoint address)
+        private bool IsUsed(Point address)
         {
             // This is different from XLCellUsedOptions, which uses a business logic (e.g. empty string is considered not-used).
             // Here, we ask whether any slice contains a used elements which might differ from cell used logic.
@@ -356,7 +356,7 @@ namespace ClosedXML.Excel
             return false;
         }
 
-        internal void SwapCellsContent(XLSheetPoint sp1, XLSheetPoint sp2)
+        internal void SwapCellsContent(Point sp1, Point sp2)
         {
             ValueSlice.Swap(sp1, sp2);
             FormulaSlice.Swap(sp1, sp2);
@@ -367,7 +367,7 @@ namespace ClosedXML.Excel
         /// <summary>
         /// Gets used points in the range.
         /// </summary>
-        internal SlicesEnumerator ForValuesAndFormulas(XLSheetRange range)
+        internal SlicesEnumerator ForValuesAndFormulas(Area range)
         {
             var valueEnumerator = ValueSlice.GetEnumerator(range);
             var formulaEnumerator = FormulaSlice.GetEnumerator(range);
@@ -383,26 +383,48 @@ namespace ClosedXML.Excel
         /// styles, it only sets values in the slice.
         /// </remarks>
         /// <param name="area">Area that is used to check for used cells.</param>
-        /// <param name="modification">A deterministic modification.</param>
+        /// <param name="modification">A deterministic modification. It should ensure the returned formats are registered in workbook styles.</param>
         /// <param name="resolver">A provider of format for non-materialized cells (e.g. column has a format and thus non-materialized cells should use column format).</param>
-        internal void ApplyFormatOnUsed(XLSheetRange area, Func<XLCellFormatValue, XLCellFormatValue> modification, Func<XLSheetPoint, XLCellFormatValue> resolver)
+        internal void ApplyFormatOnUsed(Area area, Func<XLCellFormatValue, XLCellFormatValue> modification, Func<Point, XLCellFormatValue> resolver)
         {
             var enumerator = new SlicesEnumerator(area, this);
             ApplyFormat(enumerator, modification, resolver);
+        }
+
+        /// <inheritdoc cref="ApplyFormatOnAll(Area, Func{XLCellFormatValue, XLCellFormatValue}, Func{Point, XLCellFormatValue})"/>
+        /// <remarks>Unlike general purpose method, the modification function of this one doesn't require explicit
+        /// registration of format into the <see cref="XLWorkbookStyles"/>.
+        /// </remarks>
+        /// <param name="area">Area that will have its format modified.</param>
+        /// <param name="modififyBorder">Return a modified border of a format. Must be deterministic.</param>
+        internal void ApplyFormatOnAll(Area area, Func<XLBorderFormatValue, XLBorderFormatValue> modififyBorder)
+        {
+            var styles = Worksheet.Workbook.Styles;
+            Func<XLCellFormatValue, XLCellFormatValue> modifyFormat = format =>
+            {
+                var modifiedBorder = styles.GetRegisteredBorderFormat(format.Border, modififyBorder);
+                var modifiedFormat = format with
+                {
+                    Border = modifiedBorder,
+                    CustomFormat = format.CustomFormat | CellFormatComponents.Border
+                };
+                return styles.GetRegisteredCellFormat(modifiedFormat, static f => f);
+            };
+            ApplyFormatOnAll(area, modifyFormat, point => Worksheet.GetStyleValue(point));
         }
 
         /// <summary>
         /// Apply a deterministic format change on all cells in <paramref name="area"/>.
         /// </summary>
         /// <inheritdoc cref="ApplyFormatOnUsed"/>
-        internal void ApplyFormatOnAll(XLSheetRange area, Func<XLCellFormatValue, XLCellFormatValue> modification, Func<XLSheetPoint, XLCellFormatValue> resolver)
+        internal void ApplyFormatOnAll(Area area, Func<XLCellFormatValue, XLCellFormatValue> modification, Func<Point, XLCellFormatValue> resolver)
         {
             using var areaEnumerator = area.GetEnumerator();
             var enumerator = new SlicesEnumerator(false, areaEnumerator);
             ApplyFormat(enumerator, modification, resolver);
         }
 
-        private void ApplyFormat(SlicesEnumerator enumerator, Func<XLCellFormatValue, XLCellFormatValue> modification, Func<XLSheetPoint, XLCellFormatValue> resolver)
+        private void ApplyFormat(SlicesEnumerator enumerator, Func<XLCellFormatValue, XLCellFormatValue> modification, Func<Point, XLCellFormatValue> resolver)
         {
             var cache = new Dictionary<XLCellFormatValue, XLCellFormatValue>(ReferenceEqualityComparer<XLCellFormatValue>.Instance);
             while (enumerator.MoveNext())
@@ -421,14 +443,14 @@ namespace ClosedXML.Excel
 
         /// <summary>
         /// Enumerator that combines several other slice enumerators and enumerates
-        /// <see cref="XLSheetPoint"/> in any of them.
+        /// <see cref="Point"/> in any of them.
         /// </summary>
         internal struct SlicesEnumerator
         {
-            private readonly List<IEnumerator<XLSheetPoint>> _enumerators;
+            private readonly List<IEnumerator<Point>> _enumerators;
             private readonly bool _reverse;
 
-            public SlicesEnumerator(XLSheetRange range, XLCellsCollection cellsCollection, bool reverse = false)
+            public SlicesEnumerator(Area range, XLCellsCollection cellsCollection, bool reverse = false)
                 : this(
                     reverse,
                     cellsCollection.ValueSlice.GetEnumerator(range, reverse),
@@ -438,9 +460,9 @@ namespace ClosedXML.Excel
             {
             }
 
-            public SlicesEnumerator(bool reverse, params IEnumerator<XLSheetPoint>[] enumerators)
+            public SlicesEnumerator(bool reverse, params IEnumerator<Point>[] enumerators)
             {
-                Current = new XLSheetPoint(1, 1);
+                Current = new Point(1, 1);
                 _reverse = reverse;
                 _enumerators = new();
                 foreach (var enumerator in enumerators)
@@ -450,11 +472,11 @@ namespace ClosedXML.Excel
                 }
             }
 
-            public XLSheetPoint Current { get; private set; }
+            public Point Current { get; private set; }
 
             public bool MoveNext()
             {
-                XLSheetPoint? current = null;
+                Point? current = null;
                 for (var i = 0; i < _enumerators.Count; ++i)
                 {
                     var enumerator = _enumerators[i];
@@ -490,7 +512,7 @@ namespace ClosedXML.Excel
 
         void IWorkbookListener.OnSheetRenamed(string oldSheetName, string newSheetName)
         {
-            using var enumerator = FormulaSlice.GetForwardEnumerator(XLSheetRange.Full);
+            using var enumerator = FormulaSlice.GetForwardEnumerator(Area.Full);
             while (enumerator.MoveNext())
             {
                 ref readonly XLCellFormula cellFormula = ref enumerator.Current;

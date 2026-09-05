@@ -41,7 +41,7 @@ namespace ClosedXML.Excel
 
         private long? _maxDateTicks;
 
-        internal XLPivotCacheValues(ValueSlice valueSlice, int column, XLSheetRange area)
+        internal XLPivotCacheValues(ValueSlice valueSlice, int column, Area area)
         {
             _sharedItems = new XLPivotCacheSharedItems();
             _values = new List<XLPivotCacheValue>();
@@ -230,12 +230,12 @@ namespace ClosedXML.Excel
             return false;
         }
 
-        private void Initialize(ValueSlice valueSlice, int column, XLSheetRange area)
+        private void Initialize(ValueSlice valueSlice, int column, Area area)
         {
             var uniqueItems = new HashSet<XLCellValue>(XLCellValueComparer.OrdinalIgnoreCase);
             for (var row = area.TopRow + 1; row <= area.BottomRow; ++row)
             {
-                var value = valueSlice.GetCellValue(new XLSheetPoint(row, column));
+                var value = valueSlice.GetCellValue(new Point(row, column));
 
                 // Add to shared items first, because value can be an index to shared items.
                 if (uniqueItems.Add(value))

@@ -162,6 +162,26 @@ namespace ClosedXML.Tests.Excel.CalcEngine
             Assert.AreEqual(XLError.IncompatibleValue, ws.Evaluate(formula, "D11"));
         }
 
+        [Test]
+        public void Structured_reference_uses_cells_from_table_worksheet()
+        {
+            // Structured reference uses cells from the sheet of the table, not sheet where is the formula.
+            // https://github.com/ClosedXML/ClosedXML/issues/2871
+            using var wb = new XLWorkbook();
+            var tableSheet = wb.AddWorksheet("TableSheet");
+            tableSheet.Cell("B3").InsertTable(
+                [
+                    new { Name = "Cake", Price = 7 },
+                    new { Name = "Pie", Price = 9 }
+                ],
+                "Pastries");
+            var formulaSheet = wb.AddWorksheet();
+
+            formulaSheet.Cell("A1").FormulaA1 = "SUM(Pastries[Price])";
+
+            Assert.That(formulaSheet.Cell("A1").Value, Is.EqualTo(16));
+        }
+
         private static IXLTable Add4X3Table(IXLWorksheet ws, string origin)
         {
             var dt = new DataTable("TableName");
@@ -196,7 +216,7 @@ namespace ClosedXML.Tests.Excel.CalcEngine
                 return;
             }
 
-            var expected = XLSheetRange.Parse(expectedArea);
+            var expected = Area.Parse(expectedArea);
             Assert.AreEqual(expected.LeftColumn, ws.Evaluate($"COLUMN({structureReference})", formulaAddress));
             Assert.AreEqual(expected.TopRow, ws.Evaluate($"ROW({structureReference})", formulaAddress));
             Assert.AreEqual(expected.Height, ws.Evaluate($"ROWS({structureReference})", formulaAddress));

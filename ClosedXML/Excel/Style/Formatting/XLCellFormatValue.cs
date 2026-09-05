@@ -7,7 +7,7 @@ namespace ClosedXML.Excel.Formatting;
 /// </summary>
 internal record XLCellFormatValue
 {
-    public required string NumberFormat { get; init; }
+    public required XLNumberFormat NumberFormat { get; init; }
 
     public required XLAlignmentFormatValue Alignment { get; init; }
 
@@ -62,5 +62,14 @@ internal record XLCellFormatValue
             PivotButton = false,
             CustomFormat = CellFormatComponents.None
         };
+    }
+
+    /// <summary>
+    /// Cell formats in <see cref="XLWorkbookStyles"/> should have only one instance per different cell format.
+    /// That means we can check sameness of two formats much easier and faster than comparing them by value.
+    /// </summary>
+    internal static bool AreSame(XLCellFormatValue lhs, XLCellFormatValue rhs)
+    {
+        return ReferenceEquals(lhs, rhs);
     }
 }

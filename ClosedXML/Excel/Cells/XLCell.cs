@@ -1,7 +1,5 @@
 #nullable disable
 
-using ClosedXML.Excel.InsertData;
-using ClosedXML.Extensions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,19 +9,17 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using ClosedXML.Graphics;
-using ClosedXML.Parser;
 using ClosedXML.Excel.CalcEngine.Visitors;
 using ClosedXML.Excel.Formatting;
+using ClosedXML.Excel.InsertData;
+using ClosedXML.Extensions;
+using ClosedXML.Graphics;
+using ClosedXML.Parser;
 
 namespace ClosedXML.Excel
 {
     [DebuggerDisplay("{Address}")]
-    internal sealed class XLCell :
-#if !STYLES_REWORK
-        XLStylizedBase, IXLStylized,
-#endif
-        IXLCell, IXLFormatContainer
+    internal sealed class XLCell : IXLCell, IXLFormatContainer
     {
         public static readonly Regex A1SimpleRegex = new Regex(
             //  @"(?<=\W)" // Start with non word
@@ -74,7 +70,7 @@ namespace ClosedXML.Excel
             _columnNumber = column;
         }
 
-        internal XLCell(XLWorksheet worksheet, XLSheetPoint point) : this(worksheet, point.Row, point.Column)
+        internal XLCell(XLWorksheet worksheet, Point point) : this(worksheet, point.Row, point.Column)
         {
         }
 
@@ -82,7 +78,9 @@ namespace ClosedXML.Excel
 
         public XLAddress Address => new(Worksheet, _rowNumber, _columnNumber, false, false);
 
-        internal XLSheetPoint SheetPoint => new(_rowNumber, _columnNumber);
+        internal Point Point => new(_rowNumber, _columnNumber);
+
+        private XLWorkbookStyles Styles => Worksheet.Workbook.Styles;
 
         #region Slice fields
 
@@ -91,42 +89,28 @@ namespace ClosedXML.Excel
         /// </summary>
         public bool ShareString
         {
-            get => _cellsCollection.ValueSlice.GetShareString(SheetPoint);
-            set => _cellsCollection.ValueSlice.SetShareString(SheetPoint, value);
+            get => _cellsCollection.ValueSlice.GetShareString(Point);
+            set => _cellsCollection.ValueSlice.SetShareString(Point, value);
         }
 
-        /// <summary>
-        /// Overriden <see cref="XLStylizedBase.StyleValue"/>, because we can't store the value
-        /// in the cell.
-        /// </summary>
-#if STYLES_REWORK
-        public XLStyleValue StyleValue
-#else
-        public override XLStyleValue StyleValue
-#endif
-        {
-            get => Worksheet.GetStyleValue(SheetPoint);
-            set => _cellsCollection.FormatSlice.Set(SheetPoint, value);
-        }
-
-        internal int MemorySstId => _cellsCollection.ValueSlice.GetShareStringId(SheetPoint);
+        internal int MemorySstId => _cellsCollection.ValueSlice.GetShareStringId(Point);
 
         internal XLImmutableRichText RichText => SliceRichText;
 
         private XLCellValue SliceCellValue
         {
-            get => _cellsCollection.ValueSlice.GetCellValue(SheetPoint);
+            get => _cellsCollection.ValueSlice.GetCellValue(Point);
             set
             {
-                _cellsCollection.ValueSlice.SetCellValue(SheetPoint, value);
-                Worksheet.Workbook.CalcEngine.MarkDirty(Worksheet, SheetPoint);
+                _cellsCollection.ValueSlice.SetCellValue(Point, value);
+                Worksheet.Workbook.CalcEngine.MarkDirty(Worksheet, Point);
             }
         }
 
         private XLImmutableRichText SliceRichText
         {
-            get => _cellsCollection.ValueSlice.GetRichText(SheetPoint);
-            set => _cellsCollection.ValueSlice.SetRichText(SheetPoint, value);
+            get => _cellsCollection.ValueSlice.GetRichText(Point);
+            set => _cellsCollection.ValueSlice.SetRichText(Point, value);
         }
 
         private XLComment SliceComment
@@ -179,17 +163,17 @@ namespace ClosedXML.Excel
         /// </summary>
         internal XLCellFormula Formula
         {
-            get => _cellsCollection.FormulaSlice.Get(SheetPoint);
+            get => _cellsCollection.FormulaSlice.Get(Point);
             set
             {
-                _cellsCollection.FormulaSlice.Set(SheetPoint, value);
+                _cellsCollection.FormulaSlice.Set(Point, value);
 
                 // Because text values of evaluated formulas are stored in a worksheet part, mark it as inlined string and store in sst.
                 // If we are clearing formula, we should enable shareString back on, because it is a default position.
                 // If we are setting formula, we should disable shareString (=inline), because it must be written to the worksheet part
                 var clearFormula = value is null;
                 ShareString = clearFormula;
-                Worksheet.Workbook.CalcEngine.MarkDirty(Worksheet, SheetPoint);
+                Worksheet.Workbook.CalcEngine.MarkDirty(Worksheet, Point);
             }
         }
 
@@ -197,10 +181,14 @@ namespace ClosedXML.Excel
 
         #region IXLFormatContainer
 #nullable enable
+
+        /// <summary>
+        /// A format of a cell. If cell format depends on inherited format, the value is <c>null</c>.
+        /// </summary>
         public XLCellFormatValue? FormatValue
         {
-            get => _cellsCollection.FormatSlice.GetFormat(SheetPoint);
-            set => _cellsCollection.FormatSlice.Set(SheetPoint, value);
+            get => _cellsCollection.FormatSlice.GetFormat(Point);
+            set => _cellsCollection.FormatSlice.Set(Point, value);
         }
 #nullable disable
         #endregion
@@ -214,39 +202,40 @@ namespace ClosedXML.Excel
 
         internal XLComment CreateComment(int? shapeId = null)
         {
-            return SliceComment = new XLComment(this, shapeId: shapeId);
+            return SliceComment = XLComment.Create(this, shapeId: shapeId);
         }
 
         public XLRichText GetRichText()
         {
             var sliceRichText = SliceRichText;
             if (sliceRichText is not null)
-                return new XLRichText(this, sliceRichText);
+            {
+                var cellFormat = GetFormat();
+                return new XLRichText(this, cellFormat.Font, sliceRichText);
+            }
 
             return CreateRichText();
         }
 
         public XLRichText CreateRichText()
         {
-            var font = new XLFont(GetStyleForRead().Font.Key);
+            var fontFormat = GetFormat().Font;
 
             // Don't include rich text string with 0 length to a new rich text
             var richText = DataType == XLDataType.Blank
-                ? new XLRichText(this, font)
-                : new XLRichText(this, GetFormattedString(), font);
+                ? new XLRichText(this, fontFormat)
+                : new XLRichText(this, fontFormat, GetFormattedString());
             SliceRichText = XLImmutableRichText.Create(richText);
             return richText;
         }
 
         #region IXLCell Members
 
-#if STYLES_REWORK
         public IXLStyle Style
         {
             get => Format;
             set => Format.SetStyle(value);
         }
-#endif
 
         IXLWorksheet IXLCell.Worksheet
         {
@@ -268,31 +257,13 @@ namespace ClosedXML.Excel
             if (checkMergedRanges && IsInferiorMergedCell())
                 return this;
 
-            SetValueAndStyle(value);
+            // Mimic Excel behavior: When a value is set to a a certain types (e.g. timespan or
+            // a date), the format of a cell is changed.
+            var valueRequiredFormat = Worksheet.GetStyleForValue(value, Point);
+            if (valueRequiredFormat is not null)
+                FormatValue = valueRequiredFormat;
 
-            FormulaA1 = null;
-
-            if (setTableHeader)
-            {
-                var cellRange = new XLSheetRange(SheetPoint, SheetPoint);
-                foreach (var table in Worksheet.Tables)
-                    table.RefreshFieldsFromCells(cellRange);
-            }
-
-            return this;
-        }
-
-        /// <summary>
-        /// Set value of a cell and its format (if necessary) from the passed value.
-        /// It doesn't clear formulas or checks merged cells or tables.
-        /// </summary>
-        private void SetValueAndStyle(XLCellValue value)
-        {
-            var modifiedStyleValue = Worksheet.GetStyleForValue(value, SheetPoint);
-            if (modifiedStyleValue is not null)
-                StyleValue = modifiedStyleValue;
-
-            // Modify value after style, because we might strip the '
+            // Modify value after style, because we might need to strip the '
             if (value.Type == XLDataType.Text)
             {
                 var text = value.GetText();
@@ -303,6 +274,17 @@ namespace ClosedXML.Excel
             }
 
             SetOnlyValue(value);
+
+            FormulaA1 = null;
+
+            if (setTableHeader)
+            {
+                var cellRange = new Area(Point, Point);
+                foreach (var table in Worksheet.Tables)
+                    table.RefreshFieldsFromCells(cellRange);
+            }
+
+            return this;
         }
 
         public Boolean GetBoolean() => Value.GetBoolean();
@@ -517,9 +499,9 @@ namespace ClosedXML.Excel
         internal string GetFormattedString(XLCellValue value, CultureInfo culture = null)
         {
             culture ??= CultureInfo.CurrentCulture;
-            var format = GetFormat();
+            var numberFormat = GetFormat().NumberFormat;
             return value.IsUnifiedNumber
-                ? value.GetUnifiedNumber().ToExcelFormat(format, culture)
+                ? value.GetUnifiedNumber().ToExcelFormat(numberFormat, culture)
                 : value.ToString(culture);
         }
 
@@ -625,7 +607,7 @@ namespace ClosedXML.Excel
         public IXLTable InsertTable<T>(IEnumerable<T> data, String tableName, Boolean createTable, Boolean addHeadings, Boolean transpose)
         {
             var reader = InsertDataReaderFactory.Instance.CreateReader(data);
-            return Worksheet.InsertTable(SheetPoint, reader, tableName, createTable, addHeadings, transpose);
+            return Worksheet.InsertTable(Point, reader, tableName, createTable, addHeadings, transpose);
         }
 
         public IXLTable InsertTable(DataTable data)
@@ -655,7 +637,7 @@ namespace ClosedXML.Excel
                 throw new InvalidOperationException($"This cell '{this.Address}' is already part of a table.");
 
             var reader = InsertDataReaderFactory.Instance.CreateReader(data);
-            return Worksheet.InsertTable(SheetPoint, reader, tableName, createTable, addHeadings: true, transpose: false);
+            return Worksheet.InsertTable(Point, reader, tableName, createTable, addHeadings: true, transpose: false);
         }
 
         public XLTableCellType TableCellType()
@@ -683,7 +665,7 @@ namespace ClosedXML.Excel
                 return null;
 
             var reader = InsertDataReaderFactory.Instance.CreateReader(data);
-            return Worksheet.InsertData(SheetPoint, reader, addHeadings: false, transpose: transpose);
+            return Worksheet.InsertData(Point, reader, addHeadings: false, transpose: transpose);
         }
 
         public IXLRange InsertData(DataTable dataTable)
@@ -692,7 +674,7 @@ namespace ClosedXML.Excel
                 return null;
 
             var reader = InsertDataReaderFactory.Instance.CreateReader(dataTable);
-            return Worksheet.InsertData(SheetPoint, reader, addHeadings: false, transpose: false);
+            return Worksheet.InsertData(Point, reader, addHeadings: false, transpose: false);
         }
 
         public XLDataType DataType => SliceCellValue.Type;
@@ -722,11 +704,11 @@ namespace ClosedXML.Excel
                 }
 
                 if (clearOptions.HasFlag(XLClearOptions.NormalFormats))
-                    SetStyle(Worksheet.Style);
+                    FormatValue = Worksheet.FormatValue;
 
                 if (clearOptions.HasFlag(XLClearOptions.ConditionalFormats))
                 {
-                    AsRange().RemoveConditionalFormatting();
+                    Worksheet.ConditionalFormats.Clear(Point);
                 }
 
                 if (clearOptions.HasFlag(XLClearOptions.Comments))
@@ -769,7 +751,7 @@ namespace ClosedXML.Excel
                 var formula = value?.TrimFormulaEqual();
                 if (!String.IsNullOrWhiteSpace(formula))
                 {
-                    var fixedFunctionsFormula = FormulaTransformation.FixFutureFunctions(formula, Worksheet.Name, SheetPoint);
+                    var fixedFunctionsFormula = FormulaTransformation.FixFutureFunctions(formula, Worksheet.Name, Point);
                     Formula = XLCellFormula.NormalA1(fixedFunctionsFormula);
                 }
                 else
@@ -783,7 +765,7 @@ namespace ClosedXML.Excel
 
         public string FormulaR1C1
         {
-            get => Formula?.GetFormulaR1C1(SheetPoint) ?? String.Empty;
+            get => Formula?.GetFormulaR1C1(Point) ?? String.Empty;
 
             set
             {
@@ -794,7 +776,7 @@ namespace ClosedXML.Excel
                 if (!String.IsNullOrWhiteSpace(formula))
                 {
                     var formulaA1 = FormulaConverter.ToA1(formula, _rowNumber, _columnNumber);
-                    var fixedFunctionsFormulaA1 = FormulaTransformation.FixFutureFunctions(formulaA1, Worksheet.Name, SheetPoint);
+                    var fixedFunctionsFormulaA1 = FormulaTransformation.FixFutureFunctions(formulaA1, Worksheet.Name, Point);
                     Formula = XLCellFormula.NormalA1(fixedFunctionsFormulaA1);
                 }
                 else
@@ -808,7 +790,7 @@ namespace ClosedXML.Excel
 
         public XLHyperlink GetHyperlink()
         {
-            if (Worksheet.Hyperlinks.TryGet(SheetPoint, out var hyperlink))
+            if (Worksheet.Hyperlinks.TryGet(Point, out var hyperlink))
                 return hyperlink;
 
             return CreateHyperlink();
@@ -818,22 +800,25 @@ namespace ClosedXML.Excel
         /// <inheritdoc />
         public void SetHyperlink(XLHyperlink? hyperlink)
         {
-            Worksheet.Hyperlinks.SetCellHyperlink(SheetPoint, hyperlink);
+            Worksheet.Hyperlinks.SetCellHyperlink(Point, hyperlink);
             if (hyperlink is null)
                 return;
 
-            var cellFont = GetStyleForRead().Font;
-            var sheetFont = Worksheet.StyleValue.Font;
-            if (cellFont.FontColor.Equals(sheetFont.FontColor))
-                Style.Font.FontColor = XLColor.FromTheme(XLThemeColor.Hyperlink);
-
-            if (cellFont.Underline == sheetFont.Underline)
-                Style.Font.Underline = XLFontUnderlineValues.Single;
+            var cellFormat = GetFormat();
+            var sheetFormat = Worksheet.GetFormat();
+            if (ReferenceEquals(cellFormat, sheetFormat))
+            {
+                FormatValue = Styles.GetModifiedFormat(cellFormat, font => font with
+                {
+                    Color = XLColor.FromTheme(XLThemeColor.Hyperlink),
+                    Underline = XLFontUnderlineValues.Single
+                });
+            }
         }
 
         internal void SetCellHyperlink(XLHyperlink hyperlink)
         {
-            Worksheet.Hyperlinks.SetCellHyperlink(SheetPoint, hyperlink);
+            Worksheet.Hyperlinks.SetCellHyperlink(Point, hyperlink);
         }
 #nullable disable
 
@@ -940,34 +925,12 @@ namespace ClosedXML.Excel
 
             if (options.HasFlag(XLCellsUsedOptions.NormalFormats))
             {
-#if STYLES_REWORK
-                if (FormatValue is { } format)
+                if (FormatValue is { } cellFormat)
                 {
-                    if (format.IncludeQuotePrefix)
-                        return false;
-
-                    // TODO Styles: Think about empty detection. Original is pretty suss, document if necessary
-                    var defaultFormat = Worksheet.Workbook.Styles.DefaultFormat;
-                    if (defaultFormat != format)
+                    var inheritedFormat = Worksheet.GetInheritedFormat(Point);
+                    if (!XLCellFormatValue.AreSame(cellFormat, inheritedFormat))
                         return false;
                 }
-#else
-
-                if (StyleValue.IncludeQuotePrefix)
-                    return false;
-
-                if (!StyleValue.Equals(Worksheet.StyleValue))
-                    return false;
-
-                if (StyleValue.Equals(Worksheet.StyleValue))
-                {
-                    if (Worksheet.Internals.RowsCollection.TryGetValue(_rowNumber, out XLRow row) && !row.StyleValue.Equals(Worksheet.StyleValue))
-                        return false;
-
-                    if (Worksheet.Internals.ColumnsCollection.TryGetValue(_columnNumber, out XLColumn column) && !column.StyleValue.Equals(Worksheet.StyleValue))
-                        return false;
-                }
-#endif
             }
 
             if (options.HasFlag(XLCellsUsedOptions.MergedRanges) && IsMerged())
@@ -980,7 +943,7 @@ namespace ClosedXML.Excel
                 return false;
 
             if (options.HasFlag(XLCellsUsedOptions.ConditionalFormats)
-                && Worksheet.ConditionalFormats.SelectMany(cf => cf.Ranges).Any(range => range.Contains(this)))
+                && Worksheet.ConditionalFormats.SelectMany<XLConditionalFormat, IXLRange>(cf => cf.Ranges).Any(range => range.Contains(this)))
                 return false;
 
             if (options.HasFlag(XLCellsUsedOptions.Sparklines) && HasSparkline)
@@ -1061,7 +1024,7 @@ namespace ClosedXML.Excel
 
         internal XLDataValidation CreateDataValidation()
         {
-            return Worksheet.DataValidations.Create(new XLSheetRange(SheetPoint));
+            return Worksheet.DataValidations.Create(new Area(Point));
         }
 
         public void Select()
@@ -1076,11 +1039,11 @@ namespace ClosedXML.Excel
 
         public Boolean Active
         {
-            get => Worksheet.ActiveCell == SheetPoint;
+            get => Worksheet.ActiveCell == Point;
             set
             {
                 if (value)
-                    Worksheet.ActiveCell = SheetPoint;
+                    Worksheet.ActiveCell = Point;
                 else if (Active)
                     Worksheet.ActiveCell = null;
             }
@@ -1092,7 +1055,7 @@ namespace ClosedXML.Excel
             return this;
         }
 
-        public Boolean HasHyperlink => Worksheet.Hyperlinks.HasHyperlink(SheetPoint);
+        public Boolean HasHyperlink => Worksheet.Hyperlinks.HasHyperlink(Point);
 
         /// <inheritdoc />
         public Boolean ShowPhonetic
@@ -1112,39 +1075,12 @@ namespace ClosedXML.Excel
 
         #endregion IXLCell Members
 
-#if !STYLES_REWORK
-        #region IXLStylized Members
-
-        void IXLStylized.ModifyStyle(Func<XLStyleKey, XLStyleKey> modification)
-        {
-            //XLCell cannot have children so the base method may be optimized
-            var styleKey = modification(StyleValue.Key);
-            StyleValue = XLStyleValue.FromKey(ref styleKey);
-        }
-
-        protected override IEnumerable<XLStylizedBase> Children
-        {
-            get { yield break; }
-        }
-
-        public override IEnumerable<IXLRange> RangesUsed
-        {
-            get
-            {
-                var retVal = new XLRanges(Worksheet) { AsRange() };
-                return retVal;
-            }
-        }
-
-        #endregion IXLStylized Members
-#endif
-
         /// <summary>
         /// Ensure the cell has style set directly on the cell, not inherited from column/row/worksheet styles.
         /// </summary>
         internal void PingStyle()
         {
-            StyleValue = StyleValue;
+            FormatValue = GetFormat();
         }
 
         public XLRange AsRange()
@@ -1154,14 +1090,12 @@ namespace ClosedXML.Excel
 
         #region Styles
 
-        private XLStyleValue GetStyleForRead()
+        /// <summary>
+        /// Get format of a cell that should be used to render it.
+        /// </summary>
+        internal XLCellFormatValue GetFormat()
         {
-            return StyleValue;
-        }
-
-        private void SetStyle(IXLStyle styleToUse)
-        {
-            Style = styleToUse;
+            return Worksheet.GetStyleValue(Point);
         }
 
         #endregion Styles
@@ -1174,21 +1108,6 @@ namespace ClosedXML.Excel
         public void DeleteSparkline()
         {
             Clear(XLClearOptions.Sparklines);
-        }
-
-        private string GetFormat()
-        {
-            var style = GetStyleForRead();
-            if (String.IsNullOrWhiteSpace(style.NumberFormat.Format))
-            {
-                var formatCodes = XLPredefinedFormat.FormatCodes;
-                if (formatCodes.TryGetValue(style.NumberFormat.NumberFormatId, out string format))
-                    return format;
-                else
-                    return string.Empty;
-            }
-            else
-                return style.NumberFormat.Format;
         }
 
         public IXLCell CopyFrom(IXLRangeBase rangeObject)
@@ -1228,7 +1147,7 @@ namespace ClosedXML.Excel
             }
 
             var rangesToMerge = asRange.Worksheet.Internals.MergedRanges
-                .Where(mr => asRange.Contains(mr))
+                .Where<XLRange>(mr => asRange.Contains(mr))
                 .Select(mr =>
                 {
                     var firstRow = _rowNumber + (mr.RangeAddress.FirstAddress.RowNumber - asRange.RangeAddress.FirstAddress.RowNumber);
@@ -1266,85 +1185,8 @@ namespace ClosedXML.Excel
                 }
             }
 
-            CopyConditionalFormatsFrom(asRange);
+            Worksheet.ConditionalFormats.CopyFrom(asRange.Worksheet, asRange.SheetRange, Point);
             return this;
-        }
-
-        private void CopyConditionalFormatsFrom(XLCell otherCell)
-        {
-            var conditionalFormats = otherCell
-                .Worksheet
-                .ConditionalFormats
-                .Where(c => c.Ranges.GetIntersectedRanges(otherCell).Any())
-                .ToList();
-
-            foreach (var cf in conditionalFormats)
-            {
-                if (otherCell.Worksheet == Worksheet)
-                {
-                    if (!cf.Ranges.GetIntersectedRanges(this).Any())
-                    {
-                        cf.Ranges.Add(this);
-                    }
-                }
-                else
-                {
-                    CopyConditionalFormatsFrom(otherCell.AsRange());
-                }
-            }
-        }
-
-        private void CopyConditionalFormatsFrom(XLRangeBase fromRange)
-        {
-            var srcSheet = fromRange.Worksheet;
-            int minRo = fromRange.RangeAddress.FirstAddress.RowNumber;
-            int minCo = fromRange.RangeAddress.FirstAddress.ColumnNumber;
-            if (srcSheet.ConditionalFormats.Any(r => r.Ranges.GetIntersectedRanges(fromRange.RangeAddress).Any()))
-            {
-                var fs = srcSheet.ConditionalFormats.SelectMany(cf => cf.Ranges.GetIntersectedRanges(fromRange.RangeAddress)).ToArray();
-                if (fs.Any())
-                {
-                    minRo = fs.Max(r => r.RangeAddress.LastAddress.RowNumber);
-                    minCo = fs.Max(r => r.RangeAddress.LastAddress.ColumnNumber);
-                }
-            }
-            int rCnt = minRo - fromRange.RangeAddress.FirstAddress.RowNumber + 1;
-            int cCnt = minCo - fromRange.RangeAddress.FirstAddress.ColumnNumber + 1;
-            rCnt = Math.Min(rCnt, fromRange.RowCount());
-            cCnt = Math.Min(cCnt, fromRange.ColumnCount());
-            var toRange = Worksheet.Range(this, Worksheet.Cell(_rowNumber + rCnt - 1, _columnNumber + cCnt - 1));
-            var formats = srcSheet.ConditionalFormats.Where(f => f.Ranges.GetIntersectedRanges(fromRange.RangeAddress).Any());
-
-            foreach (var cf in formats.ToList())
-            {
-                var fmtRanges = cf.Ranges
-                    .GetIntersectedRanges(fromRange.RangeAddress)
-                    .Select(r => r.RangeAddress.Intersection(fromRange.RangeAddress).Relative(fromRange.RangeAddress, toRange.RangeAddress).AsRange() as XLRange)
-                    .ToList();
-
-                var c = new XLConditionalFormat(Worksheet, fmtRanges, true);
-                c.CopyFrom(cf);
-                c.AdjustFormulas((XLCell)cf.Ranges.First().FirstCell(), fmtRanges.First().FirstCell());
-
-                Worksheet.ConditionalFormats.Add(c);
-            }
-        }
-
-        private bool SetDataTable(object o)
-        {
-            if (o is DataTable dataTable)
-                return InsertData(dataTable) != null;
-            else
-                return false;
-        }
-
-        private bool SetEnumerable(object collectionObject)
-        {
-            // IXLRichText implements IEnumerable, but we don't want to handle this here.
-            if (collectionObject is IXLRichText) return false;
-
-            var asEnumerable = collectionObject as IEnumerable;
-            return InsertData(asEnumerable) != null;
         }
 
         private void ClearMerged()
@@ -1356,12 +1198,12 @@ namespace ClosedXML.Excel
 
         internal string GetFormulaR1C1(string value)
         {
-            return XLCellFormula.GetFormula(value, FormulaConversionType.A1ToR1C1, new XLSheetPoint(_rowNumber, _columnNumber));
+            return XLCellFormula.GetFormula(value, FormulaConversionType.A1ToR1C1, new Point(_rowNumber, _columnNumber));
         }
 
         internal string GetFormulaA1(string value)
         {
-            return XLCellFormula.GetFormula(value, FormulaConversionType.R1C1ToA1, new XLSheetPoint(_rowNumber, _columnNumber));
+            return XLCellFormula.GetFormula(value, FormulaConversionType.R1C1ToA1, new Point(_rowNumber, _columnNumber));
         }
 
         internal void CopyValuesFrom(XLCell source)
@@ -1374,9 +1216,9 @@ namespace ClosedXML.Excel
                 SliceRichText = sourceRichText;
 
             FormulaR1C1 = source.FormulaR1C1;
-            SliceComment = source.SliceComment == null ? null : new XLComment(this, source.SliceComment, source.Style.Font, source.SliceComment.Style);
+            SliceComment = source.SliceComment == null ? null : XLComment.CreateAsCopy(this, source, source.SliceComment);
 
-            if (source.Worksheet.Hyperlinks.TryGet(source.SheetPoint, out var sourceHyperlink))
+            if (source.Worksheet.Hyperlinks.TryGet(source.Point, out var sourceHyperlink))
             {
                 SetCellHyperlink(new XLHyperlink(sourceHyperlink));
             }
@@ -1399,14 +1241,15 @@ namespace ClosedXML.Excel
             if (options.HasFlag(XLCellCopyOptions.Values))
                 CopyValuesFrom(otherCell);
 
+            // Other cell might be from a different workbook.
             if (options.HasFlag(XLCellCopyOptions.Styles))
-                StyleValue = otherCell.StyleValue;
+                FormatValue = Styles.GetRegisteredCellFormat(otherCell.GetFormat());
 
             if (options.HasFlag(XLCellCopyOptions.Sparklines))
                 CopySparklineFrom(otherCell);
 
             if (options.HasFlag(XLCellCopyOptions.ConditionalFormats))
-                CopyConditionalFormatsFrom(otherCell);
+                Worksheet.ConditionalFormats.CopyFrom(otherCell.Worksheet, otherCell.Point, Point, true);
 
             if (options.HasFlag(XLCellCopyOptions.DataValidations))
                 CopyDataValidationFrom(otherCell);
@@ -1462,7 +1305,7 @@ namespace ClosedXML.Excel
                 CopyDataValidation(otherCell, otherCell.GetDataValidation());
             else if (HasDataValidation)
             {
-                Worksheet.DataValidations.Delete(new XLSheetRange(SheetPoint));
+                Worksheet.DataValidations.Delete(new Area(Point));
             }
         }
 
@@ -1919,7 +1762,7 @@ namespace ClosedXML.Excel
                 if (value.Worksheet is not null && Worksheet != value.Worksheet)
                     throw new ArgumentException("The reference worksheet must be same as worksheet of the cell or null.");
 
-                Formula.Range = XLSheetRange.FromRangeAddress(value);
+                Formula.Range = Area.FromRangeAddress(value);
             }
         }
 
@@ -2012,11 +1855,6 @@ namespace ClosedXML.Excel
             return this.IsMerged() && !this.Address.Equals(this.MergedRange().RangeAddress.FirstAddress);
         }
 
-        internal bool IsSuperiorMergedCell()
-        {
-            return this.IsMerged() && this.Address.Equals(this.MergedRange().RangeAddress.FirstAddress);
-        }
-
         /// <summary>
         /// Get glyph bounding boxes for each grapheme in the text. Box size is determined according to
         /// the font of a grapheme. New lines are represented as default (all dimensions zero) box.
@@ -2034,7 +1872,7 @@ namespace ClosedXML.Excel
                 foreach (var richTextRun in richText.Runs)
                 {
                     var text = richText.GetRunText(richTextRun);
-                    var font = new XLFont(richTextRun.Font.Key);
+                    var font = richTextRun.Font.ToFontBase();
                     AddGlyphs(text, font, engine, dpi, output);
                 }
             }
@@ -2091,13 +1929,13 @@ namespace ClosedXML.Excel
         {
             unchecked
             {
-                return (SheetPoint.GetHashCode() * 397) ^ Worksheet.GetHashCode();
+                return (Point.GetHashCode() * 397) ^ Worksheet.GetHashCode();
             }
         }
 
         public override bool Equals(object obj)
         {
-            return obj is XLCell cell && cell.Worksheet == Worksheet && cell.SheetPoint == SheetPoint;
+            return obj is XLCell cell && cell.Worksheet == Worksheet && cell.Point == Point;
         }
     }
 }

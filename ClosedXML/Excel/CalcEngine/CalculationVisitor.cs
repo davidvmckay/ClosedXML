@@ -127,8 +127,8 @@ namespace ClosedXML.Excel.CalcEngine
             if (!TryGetRows(context, table, node.Area, out var rowStart, out var rowEnd, out var error))
                 return error;
 
-            var range = new XLSheetRange(rowStart, colStart, rowEnd, colEnd);
-            return new Reference(XLRangeAddress.FromSheetRange(context.Worksheet, range));
+            var range = new Area(rowStart, colStart, rowEnd, colEnd);
+            return new Reference(XLRangeAddress.FromSheetRange(table.Worksheet, range));
 
             static bool TryGetTable(CalcContext context, string? tableName, [NotNullWhen(true)] out XLTable? table)
             {
@@ -140,7 +140,7 @@ namespace ClosedXML.Excel.CalcEngine
                 }
 
                 // Avoid LINQ allocation.
-                var formulaPoint = context.FormulaSheetPoint;
+                var formulaPoint = context.FormulaPoint;
                 foreach (var sheetTable in context.Worksheet.Tables)
                 {
                     if (sheetTable.Area.Contains(formulaPoint))
@@ -213,7 +213,7 @@ namespace ClosedXML.Excel.CalcEngine
                         rowEndNo = area.BottomRow;
                         break;
                     case StructuredReferenceArea.ThisRow:
-                        var thisRow = context.FormulaSheetPoint.Row;
+                        var thisRow = context.FormulaPoint.Row;
                         if (area.TopRow >= thisRow || dataEndRowNo < thisRow)
                         {
                             rowStartNo = rowEndNo = default;

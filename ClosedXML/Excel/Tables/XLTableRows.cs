@@ -5,59 +5,23 @@ using System.Linq;
 
 namespace ClosedXML.Excel
 {
-    internal class XLTableRows :
-#if !STYLES_REWORK
-        XLStylizedBase,
-#endif
-        IXLTableRows
+    internal class XLTableRows : IXLTableRows
     {
         private readonly XLWorksheet _worksheet;
         private readonly List<XLTableRow> _ranges = new List<XLTableRow>();
 
         public XLTableRows(XLWorksheet worksheet)
-#if !STYLES_REWORK
-            : base(((XLStyle)worksheet.Style).Value)
-#endif
         {
             _worksheet = worksheet;
         }
 
-#if !STYLES_REWORK
-        #region IXLStylized Members
-
-        protected override IEnumerable<XLStylizedBase> Children
-        {
-            get
-            {
-                foreach (var range in _ranges)
-                {
-                    yield return range;
-                }
-            }
-        }
-
-        public override IEnumerable<IXLRange> RangesUsed
-        {
-            get
-            {
-                var retVal = new XLRanges(_worksheet);
-                this.ForEach(c => retVal.Add(c.AsRange()));
-                return retVal;
-            }
-        }
-
-        #endregion IXLStylized Members
-#endif
-
         #region IXLTableRows Members
 
-#if STYLES_REWORK
         public IXLStyle Style
         {
             get => Format;
             set => Format.SetStyle(value);
         }
-#endif
 
         public IXLTableRows Clear(XLClearOptions clearOptions = XLClearOptions.All)
         {
@@ -131,7 +95,7 @@ namespace ClosedXML.Excel
         {
             get
             {
-                var rowAreas = _ranges.Select(x => XLBookArea.From(x.RangeAddress)).ToArray();
+                var rowAreas = _ranges.Select(x => SheetArea.From(x.RangeAddress)).ToArray();
                 return XLCellFormat.ForTableRows(_worksheet, rowAreas);
             }
         }

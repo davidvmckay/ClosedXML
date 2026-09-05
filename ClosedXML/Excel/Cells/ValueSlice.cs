@@ -26,59 +26,59 @@ namespace ClosedXML.Excel
 
         public IEnumerable<int> UsedRows => _values.UsedRows;
 
-        public void Clear(XLSheetRange range)
+        public void Clear(Area area)
         {
-            DereferenceTextInRange(range);
-            _values.Clear(range);
+            DereferenceTextInRange(area);
+            _values.Clear(area);
         }
 
-        public void DeleteAreaAndShiftLeft(XLSheetRange rangeToDelete)
+        public void DeleteAreaAndShiftLeft(Area areaToDelete)
         {
-            DereferenceTextInRange(rangeToDelete);
-            _values.DeleteAreaAndShiftLeft(rangeToDelete);
+            DereferenceTextInRange(areaToDelete);
+            _values.DeleteAreaAndShiftLeft(areaToDelete);
         }
 
-        public void DeleteAreaAndShiftUp(XLSheetRange rangeToDelete)
+        public void DeleteAreaAndShiftUp(Area areaToDelete)
         {
-            DereferenceTextInRange(rangeToDelete);
-            _values.DeleteAreaAndShiftUp(rangeToDelete);
+            DereferenceTextInRange(areaToDelete);
+            _values.DeleteAreaAndShiftUp(areaToDelete);
         }
 
-        public IEnumerator<XLSheetPoint> GetEnumerator(XLSheetRange range, bool reverse = false) => _values.GetEnumerator(range, reverse);
+        public IEnumerator<Point> GetEnumerator(Area area, bool reverse = false) => _values.GetEnumerator(area, reverse);
 
-        public void InsertAreaAndShiftDown(XLSheetRange range)
+        public void InsertAreaAndShiftDown(Area areaToInsert)
         {
             // Only pushed out references have to be dereferenced, other text references just move.
-            if (range.BottomRow < XLHelper.MaxRowNumber)
+            if (areaToInsert.BottomRow < XLHelper.MaxRowNumber)
             {
-                var belowRange = range.BelowRange();
-                var pushedOutRows = Math.Min(range.Height, belowRange.Height);
+                var belowRange = areaToInsert.BelowRange();
+                var pushedOutRows = Math.Min(areaToInsert.Height, belowRange.Height);
                 var pushedOutRange = belowRange.SliceFromBottom(pushedOutRows);
                 DereferenceTextInRange(pushedOutRange);
             }
 
-            _values.InsertAreaAndShiftDown(range);
+            _values.InsertAreaAndShiftDown(areaToInsert);
         }
 
-        public void InsertAreaAndShiftRight(XLSheetRange range)
+        public void InsertAreaAndShiftRight(Area areaToInsert)
         {
             // Only pushed out references have to be dereferenced, other text references just move.
-            if (range.RightColumn < XLHelper.MaxColumnNumber)
+            if (areaToInsert.RightColumn < XLHelper.MaxColumnNumber)
             {
-                var rightRange = range.RightRange();
-                var pushedOutColumns = Math.Min(range.Width, rightRange.Width);
+                var rightRange = areaToInsert.RightRange();
+                var pushedOutColumns = Math.Min(areaToInsert.Width, rightRange.Width);
                 var pushedOutRange = rightRange.SliceFromRight(pushedOutColumns);
                 DereferenceTextInRange(pushedOutRange);
             }
 
-            _values.InsertAreaAndShiftRight(range);
+            _values.InsertAreaAndShiftRight(areaToInsert);
         }
 
-        public bool IsUsed(XLSheetPoint address) => _values.IsUsed(address);
+        public bool IsUsed(Point address) => _values.IsUsed(address);
 
-        public void Swap(XLSheetPoint sp1, XLSheetPoint sp2) => _values.Swap(sp1, sp2);
+        public void Swap(Point sp1, Point sp2) => _values.Swap(sp1, sp2);
 
-        internal XLCellValue GetCellValue(XLSheetPoint point)
+        internal XLCellValue GetCellValue(Point point)
         {
             ref readonly var cellValue = ref _values[point];
             var type = cellValue.Type;
@@ -96,7 +96,7 @@ namespace ClosedXML.Excel
             };
         }
 
-        internal void SetCellValue(XLSheetPoint point, XLCellValue cellValue)
+        internal void SetCellValue(Point point, XLCellValue cellValue)
         {
             ref readonly var original = ref _values[point];
 
@@ -140,7 +140,7 @@ namespace ClosedXML.Excel
             _values.Set(point, in modified);
         }
 
-        internal XLImmutableRichText? GetRichText(XLSheetPoint point)
+        internal XLImmutableRichText? GetRichText(Point point)
         {
             ref readonly var cellValue = ref _values[point];
             if (cellValue.Type != XLDataType.Text)
@@ -150,7 +150,7 @@ namespace ClosedXML.Excel
             return _sst.GetRichText((int)value);
         }
 
-        internal void SetRichText(XLSheetPoint point, XLImmutableRichText richText)
+        internal void SetRichText(Point point, XLImmutableRichText richText)
         {
             if (richText is null)
                 throw new ArgumentNullException(nameof(richText));
@@ -170,12 +170,12 @@ namespace ClosedXML.Excel
             _values.Set(point, modified);
         }
 
-        internal bool GetShareString(XLSheetPoint point)
+        internal bool GetShareString(Point point)
         {
             return !_values[point].Inline;
         }
 
-        internal void SetShareString(XLSheetPoint point, bool shareString)
+        internal void SetShareString(Point point, bool shareString)
         {
             var inlineString = !shareString;
             ref readonly var original = ref _values[point];
@@ -207,7 +207,7 @@ namespace ClosedXML.Excel
             _values.Set(point, in modified);
         }
 
-        internal int GetShareStringId(XLSheetPoint point)
+        internal int GetShareStringId(Point point)
         {
             ref readonly var value = ref _values[point];
             if (value.Type != XLDataType.Text)
@@ -219,9 +219,9 @@ namespace ClosedXML.Excel
         /// <summary>
         /// Prepare for worksheet removal, dereference all tests in a slice.
         /// </summary>
-        internal void DereferenceSlice() => DereferenceTextInRange(XLSheetRange.Full);
+        internal void DereferenceSlice() => DereferenceTextInRange(Area.Full);
 
-        private void DereferenceTextInRange(XLSheetRange range)
+        private void DereferenceTextInRange(Area range)
         {
             // Dereference all texts in the range, so the ref count is kept correct.
             using var e = _values.GetEnumerator(range);

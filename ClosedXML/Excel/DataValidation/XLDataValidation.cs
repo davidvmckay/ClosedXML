@@ -1,8 +1,6 @@
-#nullable disable
-
-// Keep this file CodeMaid organised and cleaned
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace ClosedXML.Excel
@@ -58,6 +56,7 @@ namespace ClosedXML.Excel
                    (!String.IsNullOrWhiteSpace(ErrorTitle) || !String.IsNullOrWhiteSpace(ErrorMessage)));
         }
 
+        [MemberNotNull(nameof(minValue), nameof(maxValue), nameof(InputTitle), nameof(InputMessage), nameof(ErrorTitle), nameof(ErrorMessage))]
         private void Initialize()
         {
             AllowedValues = XLAllowedValues.AnyValue;
@@ -72,8 +71,8 @@ namespace ClosedXML.Excel
             ErrorStyle = XLErrorStyle.Stop;
             Operator = XLOperator.Between;
             Value = String.Empty;
-            MinValue = String.Empty;
-            MaxValue = String.Empty;
+            minValue = String.Empty;
+            maxValue = String.Empty;
         }
 
         #region IXLDataValidation Members
@@ -180,7 +179,7 @@ namespace ClosedXML.Excel
                 return;
 
             // Ignore sheet of a range
-            var area = XLSheetRange.FromRangeAddress(range.RangeAddress);
+            var area = Area.FromRangeAddress(range.RangeAddress);
             _worksheet.DataValidations.AddArea(this, area);
         }
 
@@ -245,7 +244,7 @@ namespace ClosedXML.Excel
             if (range == null)
                 return false;
 
-            var areaToDelete = XLBookArea.From(range).Area;
+            var areaToDelete = SheetArea.From(range).Area;
             var originalAreas = Areas;
             Areas = Areas.Without(areaToDelete);
             var deleted = originalAreas.Count > Areas.Count;

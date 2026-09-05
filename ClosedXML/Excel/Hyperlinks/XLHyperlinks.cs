@@ -14,11 +14,11 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
     /// <summary>
     /// XLHyperlink doesn't contain range, it is user created and only then it is associated with an area in a sheet.
     /// </summary>
-    private readonly List<(XLHyperlink Link, XLSheetRange Area)> _hyperlinks = new();
+    private readonly List<(XLHyperlink Link, Area Area)> _hyperlinks = new();
     private readonly RTree<XLHyperlink> _areaIndex = new();
-    private readonly Dictionary<XLHyperlink, XLSheetRange> _linkIndex = new();
+    private readonly Dictionary<XLHyperlink, Area> _linkIndex = new();
 
-    private delegate (bool Success, XLSheetRange? RepositionedArea) RepositionFunc(XLSheetRange hyperlinkArea);
+    private delegate (bool Success, Area? RepositionedArea) RepositionFunc(Area hyperlinkArea);
 
     internal XLHyperlinks(XLWorksheet worksheet)
     {
@@ -29,7 +29,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
 
     #region ISheetListener
 
-    void ISheetListener.OnInsertAreaAndShiftDown(XLWorksheet sheet, XLSheetRange insertedArea)
+    void ISheetListener.OnInsertAreaAndShiftDown(XLWorksheet sheet, Area insertedArea)
     {
         RepositionOnChange(sheet, hyperlinkArea =>
         {
@@ -38,7 +38,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         });
     }
 
-    void ISheetListener.OnInsertAreaAndShiftRight(XLWorksheet sheet, XLSheetRange insertedArea)
+    void ISheetListener.OnInsertAreaAndShiftRight(XLWorksheet sheet, Area insertedArea)
     {
         RepositionOnChange(sheet, hyperlinkArea =>
         {
@@ -47,7 +47,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         });
     }
 
-    void ISheetListener.OnDeleteAreaAndShiftLeft(XLWorksheet sheet, XLSheetRange deletedArea)
+    void ISheetListener.OnDeleteAreaAndShiftLeft(XLWorksheet sheet, Area deletedArea)
     {
         RepositionOnChange(sheet, hyperlinkArea =>
         {
@@ -56,7 +56,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         });
     }
 
-    void ISheetListener.OnDeleteAreaAndShiftUp(XLWorksheet sheet, XLSheetRange deletedArea)
+    void ISheetListener.OnDeleteAreaAndShiftUp(XLWorksheet sheet, Area deletedArea)
     {
         RepositionOnChange(sheet, hyperlinkArea =>
         {
@@ -115,7 +115,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         if (address.Worksheet is not null && address.Worksheet != _worksheet)
             return false;
 
-        var cellPoint = XLSheetPoint.FromAddress(address);
+        var cellPoint = Point.FromAddress(address);
         if (!TryGet(cellPoint, out var cellLink))
             return false;
 
@@ -130,7 +130,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         if (address.Worksheet is not null && address.Worksheet != _worksheet)
             throw new KeyNotFoundException("Address is for a different sheet.");
 
-        var point = XLSheetPoint.FromAddress(address);
+        var point = Point.FromAddress(address);
         if (!TryGet(point, out var link))
             throw new KeyNotFoundException($"No hyperlink is defined for cell {point}.");
 
@@ -146,11 +146,11 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
             return false;
         }
 
-        var point = XLSheetPoint.FromAddress(address);
+        var point = Point.FromAddress(address);
         return TryGet(point, out hyperlink);
     }
 
-    internal bool HasHyperlink(XLSheetPoint point)
+    internal bool HasHyperlink(Point point)
     {
         var areaNodes = new List<RTree<XLHyperlink>.Node>();
         return _areaIndex.GetNodes(point, areaNodes).Count > 0;
@@ -160,7 +160,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
     /// Set a hyperlink of a single cell. Doesn't modify style, ignores hyperlinks with areas that
     /// cover the cell.
     /// </summary>
-    internal void SetCellHyperlink(XLSheetPoint point, XLHyperlink? link)
+    internal void SetCellHyperlink(Point point, XLHyperlink? link)
     {
         // We only care about links defined for individual cell, not any link that covers the cell
         var pointNodes = new List<RTree<XLHyperlink>.Node>();
@@ -174,9 +174,9 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         Add(point, link);
     }
 
-    internal bool TryGet(XLSheetPoint point, [NotNullWhen(true)] out XLHyperlink? hyperlink)
+    internal bool TryGet(Point point, [NotNullWhen(true)] out XLHyperlink? hyperlink)
     {
-        var cellArea = new XLSheetRange(point);
+        var cellArea = new Area(point);
         var areaNodes = new List<RTree<XLHyperlink>.Node>();
         _areaIndex.GetNodes(cellArea, areaNodes);
 
@@ -208,7 +208,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         return new XLCell(_worksheet, area.FirstPoint);
     }
 
-    private void Add(XLSheetRange linkArea, XLHyperlink link)
+    private void Add(Area linkArea, XLHyperlink link)
     {
         if (link.Container is not null && link.Container != this)
             throw new InvalidOperationException("Hyperlink is attached to a different worksheet. Either remove it from the original worksheet or create a new hyperlink.");
@@ -229,7 +229,7 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         Remove(link, out _);
     }
 
-    private bool Remove(XLHyperlink link, out XLSheetRange area)
+    private bool Remove(XLHyperlink link, out Area area)
     {
         if (!_linkIndex.Remove(link, out area))
             return false;
@@ -242,10 +242,11 @@ internal class XLHyperlinks : IXLHyperlinks, ISheetListener
         return true;
     }
 
-    private void ClearHyperlinkStyle(XLSheetRange range)
+    private void ClearHyperlinkStyle(Area range)
     {
-        var sheetColor = _worksheet.StyleValue.Font.FontColor;
-        var sheetUnderline = _worksheet.StyleValue.Font.Underline;
+        var worksheetFont = _worksheet.GetFormat().Font;
+        var sheetColor = worksheetFont.Color;
+        var sheetUnderline = worksheetFont.Underline;
         foreach (var point in range)
         {
             var cell = _worksheet.GetCell(point);

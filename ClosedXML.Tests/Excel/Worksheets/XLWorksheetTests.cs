@@ -579,13 +579,13 @@ namespace ClosedXML.Tests
 
             void AssertStylesAreEqual(IXLWorksheet ws1, IXLWorksheet ws2)
             {
-                Assert.AreEqual((ws1.Style as XLStyle).Value, (ws2.Style as XLStyle).Value,
+                Assert.That(((XLWorksheet)ws1).FormatValue, Is.Not.Null.And.EqualTo(((XLWorksheet)ws2).FormatValue),
                     "Worksheet styles differ");
                 var cellsUsed = ws1.Range(ws1.FirstCell(), ws1.LastCellUsed()).Cells();
                 foreach (var cell in cellsUsed)
                 {
-                    var style1 = (cell.Style as XLStyle).Value;
-                    var style2 = (ws2.Cell(cell.Address.ToString()).Style as XLStyle).Value;
+                    var style1 = ((XLCell)cell).FormatValue;
+                    var style2 = ((XLCell)ws2.Cell(cell.Address.ToString())).FormatValue;
                     Assert.AreEqual(style1, style2, $"Cell {cell.Address} styles differ");
                 }
             }
@@ -602,7 +602,7 @@ namespace ClosedXML.Tests
                 ws1.Range("A:A").AddConditionalFormat()
                     .WhenContains("0").Fill.SetBackgroundColor(XLColor.Red);
                 var cf = ws1.Range("B1:C2").AddConditionalFormat();
-                cf.Ranges.Add(ws1.Range("D4:D5"));
+                cf.Ranges = ws1.Ranges("B1:C2,D4:D5");
                 cf.WhenEqualOrGreaterThan(100).Font.SetBold();
 
                 var ws2 = ws1.CopyTo(wb2, "Copy");
@@ -612,16 +612,13 @@ namespace ClosedXML.Tests
                 {
                     var original = ws1.ConditionalFormats.ElementAt(i);
                     var copy = ws2.ConditionalFormats.ElementAt(i);
-                    Assert.AreEqual(original.Ranges.Count, copy.Ranges.Count);
-                    for (int j = 0; j < original.Ranges.Count; j++)
-                    {
-                        Assert.AreEqual(original.Ranges.ElementAt(j).RangeAddress.ToString(XLReferenceStyle.A1, false),
-                            copy.Ranges.ElementAt(j).RangeAddress.ToString(XLReferenceStyle.A1, false));
-                    }
-
-                    Assert.AreEqual((original.Style as XLStyle).Value, (copy.Style as XLStyle).Value);
+                    Assert.AreEqual(original.Ranges.ToSpaceList(), copy.Ranges.ToSpaceList());
+                    Assert.AreEqual(((XLConditionalFormat)original).FormatValue, ((XLConditionalFormat)copy).FormatValue);
                     Assert.AreEqual(original.Values.Single().Value.Value, copy.Values.Single().Value.Value);
                 }
+
+                // Make sure the copy can be saved
+                wb2.SaveAs(new MemoryStream());
             }
         }
 
@@ -673,7 +670,6 @@ namespace ClosedXML.Tests
                     Assert.AreEqual(original.ShowHeaderRow, copy.ShowHeaderRow);
                     Assert.AreEqual(original.ShowRowStripes, copy.ShowRowStripes);
                     Assert.AreEqual(original.ShowTotalsRow, copy.ShowTotalsRow);
-                    Assert.AreEqual((original.Style as XLStyle).Value, (copy.Style as XLStyle).Value);
                     Assert.AreEqual(original.Theme, copy.Theme);
                 }
             }
@@ -1403,7 +1399,7 @@ namespace ClosedXML.Tests
             var found = wb.Worksheets.TryGetWorksheet(searchedSheetName, out var foundSheet);
 
             Assert.AreEqual(expectedFound, found);
-            Assert.That(foundSheet, found ? Is.SameAs(sheet): Is.Null);
+            Assert.That(foundSheet, found ? Is.SameAs(sheet) : Is.Null);
         }
     }
 }

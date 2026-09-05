@@ -6,22 +6,22 @@ internal partial class XLDxFormat : IXLStyle
 {
     IXLAlignment IXLStyle.Alignment
     {
-        get => throw new NotImplementedException();
-        set => throw new NotImplementedException();
+        get => Alignment;
+        set => Alignment.SetValue(value);
     }
 
     IXLBorder IXLStyle.Border
     {
-        get => throw new NotImplementedException();
-        set => throw new NotImplementedException();
+        get => Border;
+        set => Border.SetValue(value);
     }
 
-    IXLNumberFormat IXLStyle.DateFormat => throw new NotImplementedException();
+    IXLNumberFormat IXLStyle.DateFormat => NumberFormat;
 
     IXLFill IXLStyle.Fill
     {
-        get => throw new NotImplementedException();
-        set => throw new NotImplementedException();
+        get => Fill;
+        set => Fill.SetValue(value);
     }
 
     IXLFont IXLStyle.Font
@@ -32,25 +32,26 @@ internal partial class XLDxFormat : IXLStyle
 
     bool IXLStyle.IncludeQuotePrefix
     {
-        get => throw new NotImplementedException();
-        set => throw new NotImplementedException();
+        get => false;
+        set => throw new NotSupportedException($"Differential format doesn't support {nameof(IXLStyle.IncludeQuotePrefix)}.");
     }
 
     IXLNumberFormat IXLStyle.NumberFormat
     {
-        get => throw new NotImplementedException();
-        set => throw new NotImplementedException();
+        get => NumberFormat;
+        set => NumberFormat.SetValue(value);
     }
 
     IXLProtection IXLStyle.Protection
     {
-        get => throw new NotImplementedException();
-        set => throw new NotImplementedException();
+        get => Protection;
+        set => Protection.SetValue(value);
     }
 
     IXLStyle IXLStyle.SetIncludeQuotePrefix(bool includeQuotePrefix)
     {
-        throw new NotImplementedException();
+        (this as IXLStyle).IncludeQuotePrefix = includeQuotePrefix;
+        return this;
     }
 
     bool IEquatable<IXLStyle>.Equals(IXLStyle? other)

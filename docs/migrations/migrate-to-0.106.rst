@@ -28,6 +28,10 @@ IXLAlignment
 The ``IXLAlignment.TextRotation`` now throws ``ArgumentOutOfRangeException`` on invalid rotation
 instead of original ``ArgumentException``.
 
+The ``IXLAlignment.Indent`` now throws ``InvalidOperationException`` instead of original
+``ArgumentException`` when trying to set indent on format with horizontal alignment that doesn't
+support indent.
+
 *************
 IXLWorksheets
 *************
@@ -46,6 +50,17 @@ Defined names
 A property setter ``IXLDefinedName.RefersTo`` now throws an ``ArgumentException``
 when trying to set an empty/whitespace-only value.
 
+*************
+Sparklines
+*************
+
+Property ``IXLSparkline.IsValid`` has been removed. The ``IXLSparkline`` is now an API object and
+the sparkline data should be always valid. Reminder: API objects created before a structural
+change are no longer valid after structural change.
+
+Property ``IXLSparkline.Location`` setter now throws ``ArgumentException`` on a cell from different
+sheet instead of original ``InvalidOperationException``.
+
 ************
 IXLRangeBase
 ************
@@ -59,3 +74,50 @@ IXLCell
 
 An obsolete method ``IXLRangeBase.SetDataValidation`` has been removed. Use ``GetDataValidation()``
 to access the existing rule, or ``CreateDataValidation()`` to create a new one.
+
+*******
+XLColor
+*******
+
+There is now a ``XLColor.Automatic`` color. It represents the automatic color from the color
+picker. The actual value of a color is determined by an application based on a use, generally
+either a black (e.g. font name) or white (e.g. fill). There is also a new enum member
+``XLColorType.Automatic`` for the color.
+
+*****************
+XLWorkbook.Style
+*****************
+
+The ``XLWorksheet.Style`` now represents the default format of a workbook. That means all cells
+without explicit format will use the default format. Previously, it was only storing style that
+was used for newly created worksheets.
+
+The ``XLWorksheet.DefaultStyle`` static property has been removed. The style is now an API object
+that only access data structures behind. Use ``XLWorksheet.Style`` to set format of elements back
+to the default format of a workbook (e.g. ``ws.Cell("A1").Style = wb.Style``).
+
+Default color of fill and border colors ``IXLStyle`` elements is now ``XLColor.Automatic``.
+Previously, it was (``XLColor.FromIndex(64)``).
+
+****************************
+Clearing conditional formats
+****************************
+
+Partial clearing of conditional format (e.g. clearing `B2` of conditional format for area ``A1:C3``)
+now correctly splits the format of into individual remaining areas (e.g. into ``A1:A3 B1 C1:C3 B3``).
+
+Originally, the partial clearing only worked for some situations. Concretely, it only worked when
+the area was fully horizontally/vertically split, but not for corners (``A1:B2`` without a corner) or
+center (``A1:C3`` without ``B2``).
+
+Reminder: the clearing of a conditional format is done through the Clear method with appropritate
+option, e.g. ``ws.Range("A2:C5").Clear(XLClearOptions.ConditionalFormats)``.
+
+***************************
+IXLConditionalFormat.Ranges
+***************************
+
+The ``IXLConditionalFormat.Ranges`` property had its type changed from ``IXLRanges`` to ``IEnumerable<IXLRange>``.
+If you need to set ranges, use a newly added setter, e.g. ``conditionalFormat.Ranges = ws.Ranges("A1:C5,G1:J5")``.
+
+All conditional formats now must apply to some range. They can't be empty (=with no range).

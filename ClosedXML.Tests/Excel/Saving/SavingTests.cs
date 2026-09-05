@@ -1,15 +1,18 @@
-using ClosedXML.Excel;
-using ClosedXML.Excel.Drawings;
-using ClosedXML.Tests.Utils;
-using DocumentFormat.OpenXml;
-using DocumentFormat.OpenXml.Packaging;
-using NUnit.Framework;
 using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Xml.Linq;
+using ClosedXML.Excel;
+using ClosedXML.Excel.Drawings;
+using ClosedXML.Excel.IO;
+using ClosedXML.Tests.Utils;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using NUnit.Framework;
+using SaveOptions = ClosedXML.Excel.SaveOptions;
 
 namespace ClosedXML.Tests.Excel.Saving
 {
@@ -20,12 +23,10 @@ namespace ClosedXML.Tests.Excel.Saving
         public void BooleanValueSavesAsZeroOrOne()
         {
             // When a cell evaluates to a boolean value, the text in the XML has to be true/false (lowercase only) or 0/1
-            TestHelper.CreateAndCompare(() =>
+            TestHelper.CreateAndCompare(wb =>
             {
-                var wb = new XLWorkbook();
                 var ws = wb.AddWorksheet();
                 ws.FirstCell().FormulaA1 = "=TRUE";
-                return wb;
             }, @"Other\Formulas\BooleanFormulaValues.xlsx", evaluateFormulae: true);
         }
 
@@ -322,34 +323,26 @@ namespace ClosedXML.Tests.Excel.Saving
         [Test]
         public void PreserveChartsWhenSaving()
         {
-            using (var stream = TestHelper.GetStreamFromResource(TestHelper.GetResourcePath(@"Other\Charts\PreserveCharts\inputfile.xlsx")))
-            using (var ms = new MemoryStream())
-            {
-                TestHelper.CreateAndCompare(() =>
-                {
-                    var wb = new XLWorkbook(stream);
-                    wb.SaveAs(ms);
-                    return wb;
-                }, @"Other\Charts\PreserveCharts\outputfile.xlsx");
-            }
+            TestHelper.LoadSaveAndCompare(
+                @"Other\Charts\PreserveCharts\inputfile.xlsx",
+                @"Other\Charts\PreserveCharts\outputfile.xlsx");
         }
 
         [Test]
         public void DeletingAllPicturesRemovesDrawingPart()
         {
-            TestHelper.CreateAndCompare(() =>
-            {
-                var stream = TestHelper.GetStreamFromResource(TestHelper.GetResourcePath(@"Examples\ImageHandling\ImageAnchors.xlsx"));
-                var wb = new XLWorkbook(stream);
-                foreach (var ws in wb.Worksheets)
+            TestHelper.LoadModifyAndCompare(
+                @"Examples\ImageHandling\ImageAnchors.xlsx",
+                wb =>
                 {
-                    var pictureNames = ws.Pictures.Select(pic => pic.Name).ToArray();
-                    foreach (var name in pictureNames)
-                        ws.Pictures.Delete(name);
-                }
-
-                return wb;
-            }, @"Other\Drawings\NoDrawings\outputfile.xlsx");
+                    foreach (var ws in wb.Worksheets)
+                    {
+                        var pictureNames = ws.Pictures.Select(pic => pic.Name).ToArray();
+                        foreach (var name in pictureNames)
+                            ws.Pictures.Delete(name);
+                    }
+                },
+                @"Other\Drawings\NoDrawings\outputfile.xlsx");
         }
 
         [Test]
@@ -584,12 +577,10 @@ namespace ClosedXML.Tests.Excel.Saving
         [Test]
         public void RemoveExistingInlineStringsIfRequired()
         {
-            using (var stream = TestHelper.GetStreamFromResource(TestHelper.GetResourcePath(@"Other\InlineStrings\inputfile.xlsx")))
-            using (var ms = new MemoryStream())
-            {
-                TestHelper.CreateAndCompare(() =>
+            TestHelper.LoadModifyAndCompare(
+                @"Other\InlineStrings\inputfile.xlsx",
+                wb =>
                 {
-                    var wb = new XLWorkbook(stream);
                     var ws = wb.Worksheet(1);
 
                     var numericCells = ws.CellsUsed(c => double.TryParse(c.GetString(), out double _));
@@ -606,12 +597,8 @@ namespace ClosedXML.Tests.Excel.Saving
                     {
                         cell.ShareString = true;
                     }
-
-                    wb.SaveAs(ms);
-
-                    return wb;
-                }, @"Other\InlineStrings\outputfile.xlsx");
-            }
+                },
+                @"Other\InlineStrings\outputfile.xlsx");
         }
 
         [Test]
@@ -660,6 +647,49 @@ namespace ClosedXML.Tests.Excel.Saving
 
                 return wb;
             }, @"Other\PivotTableReferenceFiles\LongText\outputfile.xlsx");
+        }
+
+        [Test]
+        public void Pivot_table_cf_dxf_is_saved()
+        {
+            // Issue #2075: Pivot table conditional format wasn't saved.
+            TestHelper.LoadSaveAndAssert(
+                @"Other\PivotTable\Save\Pivot_table_conditional_format.xlsx",
+                "/xl/worksheets/sheet1.xml",
+                sheet =>
+                {
+                    var conditionalFormatting = sheet.Descendants(XName.Get("conditionalFormatting", OpenXmlConst.Main2006SsNs));
+                    Assert.That(conditionalFormatting, new MatchesXmlConstraint(
+                        $"""
+                         <conditionalFormatting xmlns="{OpenXmlConst.Main2006SsNs}"
+                                                pivot="1"
+                                                sqref="G2:G3">
+                           <cfRule type="cellIs"
+                                    dxfId="0"
+                                    priority="1"
+                                    operator="greaterThan">
+                             <formula>10</formula>
+                           </cfRule>
+                         </conditionalFormatting>
+                         """));
+                },
+                "/xl/styles.xml",
+                styles =>
+                {
+                    var dxfs = styles.Descendants(XName.Get("dxfs", OpenXmlConst.Main2006SsNs));
+                    Assert.That(dxfs, new MatchesXmlConstraint(
+                        $"""
+                         <dxfs count="1" xmlns="{OpenXmlConst.Main2006SsNs}">
+                           <dxf>
+                             <fill>
+                               <patternFill patternType="solid">
+                                 <bgColor rgb="FF000000"/>
+                               </patternFill>
+                             </fill>
+                           </dxf>
+                         </dxfs>
+                         """));
+                });
         }
 
         [Test]

@@ -25,42 +25,42 @@ namespace ClosedXML.Excel
 
         public IEnumerable<int> UsedRows => _formulas.UsedRows;
 
-        public void Clear(XLSheetRange range)
+        public void Clear(Area area)
         {
-            _formulas.Clear(range);
+            _formulas.Clear(area);
         }
 
-        public void DeleteAreaAndShiftLeft(XLSheetRange rangeToDelete)
+        public void DeleteAreaAndShiftLeft(Area areaToDelete)
         {
-            _formulas.DeleteAreaAndShiftLeft(rangeToDelete);
+            _formulas.DeleteAreaAndShiftLeft(areaToDelete);
         }
 
-        public void DeleteAreaAndShiftUp(XLSheetRange rangeToDelete)
+        public void DeleteAreaAndShiftUp(Area areaToDelete)
         {
-            _formulas.DeleteAreaAndShiftUp(rangeToDelete);
+            _formulas.DeleteAreaAndShiftUp(areaToDelete);
         }
 
-        public IEnumerator<XLSheetPoint> GetEnumerator(XLSheetRange range, bool reverse = false)
+        public IEnumerator<Point> GetEnumerator(Area area, bool reverse = false)
         {
-            return _formulas.GetEnumerator(range, reverse);
+            return _formulas.GetEnumerator(area, reverse);
         }
 
-        public void InsertAreaAndShiftDown(XLSheetRange range)
+        public void InsertAreaAndShiftDown(Area areaToInsert)
         {
-            _formulas.InsertAreaAndShiftDown(range);
+            _formulas.InsertAreaAndShiftDown(areaToInsert);
         }
 
-        public void InsertAreaAndShiftRight(XLSheetRange range)
+        public void InsertAreaAndShiftRight(Area areaToInsert)
         {
-            _formulas.InsertAreaAndShiftRight(range);
+            _formulas.InsertAreaAndShiftRight(areaToInsert);
         }
 
-        public bool IsUsed(XLSheetPoint address)
+        public bool IsUsed(Point address)
         {
             return _formulas.IsUsed(address);
         }
 
-        public void Swap(XLSheetPoint sp1, XLSheetPoint sp2)
+        public void Swap(Point sp1, Point sp2)
         {
             var value1 = _formulas[sp1];
             var value2 = _formulas[sp2];
@@ -72,12 +72,12 @@ namespace ClosedXML.Excel
             Set(sp2, value1);
         }
 
-        internal XLCellFormula? Get(XLSheetPoint point)
+        internal XLCellFormula? Get(Point point)
         {
             return _formulas[point];
         }
 
-        internal void Set(XLSheetPoint point, XLCellFormula? formula)
+        internal void Set(Point point, XLCellFormula? formula)
         {
             // Can't ref, because it is an alias for a memory and thus wouldn't hold old formula.
             var original = _formulas[point];
@@ -88,7 +88,7 @@ namespace ClosedXML.Excel
 
             // Remove first, so calc chain doesn't choke on two formulas
             // in one cell when changing a formula of a cell.
-            var bookPoint = new XLBookPoint(_sheet.Name, point);
+            var bookPoint = new SheetPoint(_sheet.Name, point);
             if (original is not null)
                 _engine.RemoveFormula(bookPoint, original);
 
@@ -102,13 +102,13 @@ namespace ClosedXML.Excel
         /// <remarks>
         /// This method doesn't check that formula doesn't damage other array formulas.
         /// </remarks>
-        internal void SetArray(XLSheetRange range, XLCellFormula? arrayFormula)
+        internal void SetArray(Area range, XLCellFormula? arrayFormula)
         {
             for (var row = range.TopRow; row <= range.BottomRow; ++row)
             {
                 for (var col = range.LeftColumn; col <= range.RightColumn; ++col)
                 {
-                    var point = new XLSheetPoint(row, col);
+                    var point = new Point(row, col);
                     var original = _formulas[point];
 
                     _formulas.Set(point, arrayFormula);
@@ -117,7 +117,7 @@ namespace ClosedXML.Excel
                     // (number of cells formula affects doesn't matter) and also
                     // removes point from the calc chain. Therefore, it works for
                     // array and normal formulas.
-                    var bookPoint = new XLBookPoint(_sheet.Name, point);
+                    var bookPoint = new SheetPoint(_sheet.Name, point);
                     if (original is not null)
                         _engine.RemoveFormula(bookPoint, original);
                 }
@@ -127,7 +127,7 @@ namespace ClosedXML.Excel
                 _engine.AddArrayFormula(range, arrayFormula, _sheet);
         }
 
-        internal Slice<XLCellFormula>.Enumerator GetForwardEnumerator(XLSheetRange range)
+        internal Slice<XLCellFormula>.Enumerator GetForwardEnumerator(Area range)
         {
             return new Slice<XLCellFormula>.Enumerator(_formulas!, range);
         }
@@ -135,7 +135,7 @@ namespace ClosedXML.Excel
         /// <summary>
         /// Mark all formulas in a range as dirty.
         /// </summary>
-        internal void MarkDirty(XLSheetRange range)
+        internal void MarkDirty(Area range)
         {
             using var enumerator = GetForwardEnumerator(range);
             while (enumerator.MoveNext())

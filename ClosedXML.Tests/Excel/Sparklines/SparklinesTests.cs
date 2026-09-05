@@ -1,4 +1,4 @@
-﻿using ClosedXML.Examples.Sparklines;
+using ClosedXML.Examples.Sparklines;
 using ClosedXML.Excel;
 using NUnit.Framework;
 using System;
@@ -27,29 +27,20 @@ namespace ClosedXML.Tests.Excel.Sparklines
         }
 
         [Test]
-        public void CannotCreateSparklineWithoutGroup()
-        {
-            var ws = new XLWorkbook().AddWorksheet("Sheet1");
-            TestDelegate action = () => new XLSparkline(null, ws.Cell("A1"), ws.Range("A2:A5"));
-            Assert.Throws<ArgumentNullException>(action);
-        }
-
-        [Test]
         public void CannotCreateSparklineWithoutLocation()
         {
             var ws = new XLWorkbook().AddWorksheet("Sheet1");
-            var group = new XLSparklineGroup(ws);
-            TestDelegate action = () => new XLSparkline(group, null, ws.Range("A2:A5"));
+            TestDelegate action = () => ws.SparklineGroups.Add((IXLCell)null, ws.Range("A2:A5"));
             Assert.Throws<ArgumentNullException>(action);
         }
 
         [Test]
         public void CanCreateInvalidSparklineWithoutSourceData()
         {
-            var ws = new XLWorkbook().AddWorksheet("Sheet1");
-            var group = new XLSparklineGroup(ws);
-            var sparkline = new XLSparkline(group, ws.FirstCell(), null);
-            Assert.IsFalse(sparkline.IsValid);
+            using var wb = new XLWorkbook();
+            var ws = wb.AddWorksheet();
+            var sparkline = ws.SparklineGroups.Add(ws.FirstCell(), null);
+            Assert.IsNull(sparkline.Single().SourceData);
         }
 
         [Test]
@@ -425,7 +416,7 @@ namespace ClosedXML.Tests.Excel.Sparklines
 
             TestDelegate action = () => group.First().SetLocation(ws2.FirstCell());
 
-            var message = Assert.Throws<InvalidOperationException>(action).Message;
+            var message = Assert.Throws<ArgumentException>(action).Message;
             Assert.AreEqual("Cannot move the sparkline to a different worksheet", message);
         }
 
@@ -631,7 +622,7 @@ namespace ClosedXML.Tests.Excel.Sparklines
             Assert.AreEqual("A1", group.First().Location.Address.ToString());
             Assert.AreEqual("C2:C6", group.First().SourceData.RangeAddress.ToString());
             Assert.AreEqual("B1", group.Last().Location.Address.ToString());
-            Assert.IsFalse(group.Last().SourceData.RangeAddress.IsValid);
+            Assert.IsNull(group.Last().SourceData);
         }
 
         #endregion Change sparklines
@@ -727,8 +718,8 @@ namespace ClosedXML.Tests.Excel.Sparklines
                 Assert.IsTrue(group.HorizontalAxis.RightToLeft);
                 Assert.IsTrue(group.HorizontalAxis.DateAxis);
 
-                Assert.AreEqual(6.6, group.VerticalAxis.ManualMax, XLHelper.Epsilon);
-                Assert.AreEqual(1.2, group.VerticalAxis.ManualMin, XLHelper.Epsilon);
+                Assert.AreEqual(6.6, group.VerticalAxis.ManualMax.Value, XLHelper.Epsilon);
+                Assert.AreEqual(1.2, group.VerticalAxis.ManualMin.Value, XLHelper.Epsilon);
                 Assert.AreEqual(XLSparklineAxisMinMax.Custom, group.VerticalAxis.MaxAxisType);
                 Assert.AreEqual(XLSparklineAxisMinMax.Custom, group.VerticalAxis.MinAxisType);
             }
@@ -737,11 +728,12 @@ namespace ClosedXML.Tests.Excel.Sparklines
         [Test]
         public void CanLoadSparklines()
         {
-            using (var ms = TestHelper.GetStreamFromResource(TestHelper.GetResourcePath(@"Other\Sparklines\SparklineThemes\inputfile.xlsx")))
-            using (var wb = new XLWorkbook(ms))
-            {
-                Assert.IsTrue(wb.Worksheets.All(ws => ws.SparklineGroups.Count() == 6));
-            }
+            TestHelper.LoadAndAssert(
+                wb =>
+                {
+                    Assert.IsTrue(wb.Worksheets.All(ws => ws.SparklineGroups.Count() == 6));
+                },
+                @"Other\Sparklines\SparklineThemes\inputfile.xlsx");
         }
 
         [TestCase("Accent!B1", nameof(XLSparklineTheme.Accent1))]
@@ -830,31 +822,25 @@ namespace ClosedXML.Tests.Excel.Sparklines
         [Test]
         public void EmptySparklineGroupsSkippedOnSaving()
         {
-            using (var ms = new MemoryStream())
-            {
-                using (var wb = new XLWorkbook())
+            TestHelper.CreateSaveLoadAssert(
+                wb =>
                 {
                     var ws = wb.AddWorksheet("Sheet 1");
                     var group = ws.SparklineGroups.Add("A1:A2", "B1:Z2");
 
                     group.RemoveAll();
-
-                    wb.SaveAs(ms);
-                }
-
-                using (var wb = new XLWorkbook(ms))
+                },
+                wb =>
                 {
                     Assert.AreEqual(0, wb.Worksheets.First().SparklineGroups.Count());
-                }
-            }
+                });
         }
 
         [Test]
         public void CanSaveAndLoadSparklineWithInvalidRange()
         {
-            using (var ms = new MemoryStream())
-            {
-                using (var wb = new XLWorkbook())
+            TestHelper.CreateSaveLoadAssert(
+                wb =>
                 {
                     var ws1 = wb.AddWorksheet("Sheet 1");
                     var ws2 = wb.AddWorksheet("Sheet 2");
@@ -864,19 +850,26 @@ namespace ClosedXML.Tests.Excel.Sparklines
                         .SetDateRange(ws2.Range("A1:E1"));
 
                     ws2.Delete();
-                    wb.SaveAs(ms);
-                }
-
-                using (var wb = new XLWorkbook(ms))
+                },
+                wb =>
                 {
                     var ws = wb.Worksheets.Single();
 
                     Assert.AreEqual(2, ws.SparklineGroups.Count());
-                    Assert.IsFalse(ws.Cell("A2").Sparkline.IsValid);
+                    Assert.IsNull(ws.Cell("A2").Sparkline.SourceData);
                     Assert.AreEqual("B5:F5", ws.Cell("A5").Sparkline.SourceData.RangeAddress.ToString());
                     Assert.IsNull(ws.Cell("A5").Sparkline.SparklineGroup.DateRange);
-                }
-            }
+                });
+        }
+
+        [Test]
+        public void CanLoadAndSaveExternalReferences()
+        {
+            // The workbook has a sparkline with source data that are a reference to an external workbook
+            // '[1]Contract Tail YLT'!B46:E46
+            TestHelper.LoadSaveAndCompare(
+                @"Other\Sparklines\SourceDataFormulas\ExternalReference-input.xlsx",
+                @"Other\Sparklines\SourceDataFormulas\ExternalReference-output.xlsx");
         }
 
         #endregion Load and save sparkline groups
@@ -893,7 +886,7 @@ namespace ClosedXML.Tests.Excel.Sparklines
 
             axis.ManualMin = 100;
 
-            Assert.AreEqual(100, axis.ManualMin, XLHelper.Epsilon);
+            Assert.AreEqual(100, axis.ManualMin.Value, XLHelper.Epsilon);
             Assert.AreEqual(XLSparklineAxisMinMax.Custom, axis.MinAxisType);
         }
 
@@ -907,7 +900,7 @@ namespace ClosedXML.Tests.Excel.Sparklines
 
             axis.ManualMax = 100;
 
-            Assert.AreEqual(100, axis.ManualMax, XLHelper.Epsilon);
+            Assert.AreEqual(100, axis.ManualMax.Value, XLHelper.Epsilon);
             Assert.AreEqual(XLSparklineAxisMinMax.Custom, axis.MaxAxisType);
         }
 

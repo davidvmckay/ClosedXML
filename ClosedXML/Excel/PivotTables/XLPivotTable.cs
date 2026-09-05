@@ -56,7 +56,7 @@ namespace ClosedXML.Excel
             set
             {
                 var filterRows = Filters.GetSizeWithGap().Height;
-                var valuePoint = ((XLCell)value).SheetPoint;
+                var valuePoint = ((XLCell)value).Point;
                 var tableCorner = valuePoint.ShiftRow(filterRows);
                 Area = Area.At(tableCorner);
             }
@@ -751,7 +751,7 @@ namespace ClosedXML.Excel
         /// Area of a pivot table. Area doesn't include page fields, they are above the area with
         /// one empty row between area and filters.
         /// </summary>
-        internal XLSheetRange Area { get; set; } = new(1, 1, 1, 1);
+        internal Area Area { get; set; } = new(1, 1, 1, 1);
 
         /// <summary>
         /// First row of pivot table header, relative to the <see cref="Area"/>.

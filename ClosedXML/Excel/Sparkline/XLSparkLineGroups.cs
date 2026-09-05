@@ -5,9 +5,10 @@ using System.Linq;
 
 namespace ClosedXML.Excel
 {
-    internal class XLSparklineGroups : IXLSparklineGroups
+    internal class XLSparklineGroups : IXLSparklineGroups, IEnumerable<XLSparklineGroup>
     {
         private readonly XLWorksheet _worksheet;
+        private readonly List<XLSparklineGroup> _sparklineGroups = new();
 
         public XLSparklineGroups(XLWorksheet worksheet)
         {
@@ -16,14 +17,14 @@ namespace ClosedXML.Excel
 
         public IXLWorksheet Worksheet => _worksheet;
 
-        #region Public Methods
-
         /// <summary>
         /// Add empty sparkline group.
         /// </summary>
-        internal IXLSparklineGroup Add()
+        internal XLSparklineGroup Add()
         {
-            return Add(new XLSparklineGroup(Worksheet));
+            var emptyGroup = new XLSparklineGroup(Worksheet);
+            Add(emptyGroup);
+            return emptyGroup;
         }
 
         /// <summary>
@@ -36,22 +37,37 @@ namespace ClosedXML.Excel
             if (sparklineGroup.Worksheet != Worksheet)
                 throw new ArgumentException("The specified sparkline group belongs to the different worksheet");
 
-            _sparklineGroups.Add(sparklineGroup);
+            _sparklineGroups.Add((XLSparklineGroup)sparklineGroup);
             return sparklineGroup;
         }
 
         public IXLSparklineGroup Add(string locationAddress, string sourceDataAddress)
         {
+            if (locationAddress is null)
+                throw new ArgumentNullException(nameof(locationAddress));
+
+            if (sourceDataAddress is null)
+                throw new ArgumentNullException(nameof(sourceDataAddress));
+
             return Add(new XLSparklineGroup(Worksheet, locationAddress, sourceDataAddress));
         }
 
         public IXLSparklineGroup Add(IXLCell location, IXLRange sourceData)
         {
+            if (location is null)
+                throw new ArgumentNullException(nameof(location));
+
             return Add(new XLSparklineGroup(location, sourceData));
         }
 
         public IXLSparklineGroup Add(IXLRange locationRange, IXLRange sourceDataRange)
         {
+            if (locationRange is null)
+                throw new ArgumentNullException(nameof(locationRange));
+
+            if (sourceDataRange is null)
+                throw new ArgumentNullException(nameof(sourceDataRange));
+
             return Add(new XLSparklineGroup(locationRange, sourceDataRange));
         }
 
@@ -76,7 +92,7 @@ namespace ClosedXML.Excel
         {
             foreach (var slg in this)
             {
-                slg.CopyTo(targetSheet);
+                slg.CopyTo((XLWorksheet)targetSheet);
             }
         }
 
@@ -85,11 +101,19 @@ namespace ClosedXML.Excel
         /// </summary>
         /// <param name="cell">The cell to find the sparkline for</param>
         /// <returns>The sparkline in the cell or null if no sparklines are found</returns>
-        public IXLSparkline GetSparkline(IXLCell cell)
+        public IXLSparkline? GetSparkline(IXLCell cell)
         {
-            return _sparklineGroups
-                .Select(g => g.GetSparkline(cell))
-                .FirstOrDefault(s => s != null);
+            if (cell.Worksheet != _worksheet)
+                return null;
+
+            var location = Point.FromCell(cell);
+            foreach (var sparklineGroup in _sparklineGroups)
+            {
+                if (sparklineGroup.TryGetSparkline(location, out var sparkline))
+                    return sparkline;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -103,9 +127,14 @@ namespace ClosedXML.Excel
                 .SelectMany(g => g.GetSparklines(searchRange));
         }
 
-        public IEnumerator<IXLSparklineGroup> GetEnumerator()
+        public IEnumerator<XLSparklineGroup> GetEnumerator()
         {
             return _sparklineGroups.GetEnumerator();
+        }
+
+        IEnumerator<IXLSparklineGroup> IEnumerable<IXLSparklineGroup>.GetEnumerator()
+        {
+            return GetEnumerator();
         }
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
@@ -140,7 +169,12 @@ namespace ClosedXML.Excel
         /// <param name="sparklineGroup">The sparkline group to remove</param>
         public void Remove(IXLSparklineGroup sparklineGroup)
         {
-            _sparklineGroups.Remove(sparklineGroup);
+            _sparklineGroups.Remove((XLSparklineGroup)sparklineGroup);
+        }
+
+        internal void Remove(Point location)
+        {
+            _sparklineGroups.ForEach(g => g.Remove(location));
         }
 
         /// <summary>
@@ -158,62 +192,6 @@ namespace ClosedXML.Excel
         public void RemoveAll()
         {
             _sparklineGroups.Clear();
-        }
-
-        #endregion Public Methods
-
-        #region Private Fields
-
-        private readonly List<IXLSparklineGroup> _sparklineGroups = new List<IXLSparklineGroup>();
-
-        #endregion Private Fields
-
-        /// <summary>
-        /// Shift address of all sparklines to reflect inserted columns before a range.
-        /// </summary>
-        /// <param name="shiftedRange">Range before which will the columns be inserted. Has same worksheet.</param>
-        /// <param name="numberOfColumns">How many columns, can be positive or negative number.</param>
-        internal void ShiftColumns(XLSheetRange shiftedRange, int numberOfColumns)
-        {
-            foreach (var group in _sparklineGroups)
-            {
-                foreach (var sparkline in group.ToList())
-                {
-                    var originalAddress = XLSheetPoint.FromAddress(sparkline.Location.Address);
-                    if (!originalAddress.InRangeOrToLeft(shiftedRange))
-                        continue;
-
-                    var newAddressColumn = originalAddress.Column + numberOfColumns;
-                    if (newAddressColumn is >= 1 and <= XLHelper.MaxColumnNumber)
-                        sparkline.Location = new XLCell(_worksheet, originalAddress.Row, newAddressColumn);
-                    else
-                        group.Remove(sparkline);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Shift address of all sparklines to reflect inserted rows before a range.
-        /// </summary>
-        /// <param name="shiftedRange">Range before which will the rows be inserted. Has same worksheet.</param>
-        /// <param name="numberOfRows">How many rows, can be positive or negative number.</param>
-        internal void ShiftRows(XLSheetRange shiftedRange, int numberOfRows)
-        {
-            foreach (var group in _sparklineGroups)
-            {
-                foreach (var sparkline in group.ToList())
-                {
-                    var originalAddress = XLSheetPoint.FromAddress(sparkline.Location.Address);
-                    if (!originalAddress.InRangeOrBelow(shiftedRange))
-                        continue;
-
-                    var newAddressRow = originalAddress.Row + numberOfRows;
-                    if (newAddressRow is >= 1 and <= XLHelper.MaxRowNumber)
-                        sparkline.Location = new XLCell(_worksheet, newAddressRow, originalAddress.Column);
-                    else
-                        group.Remove(sparkline);
-                }
-            }
         }
     }
 }

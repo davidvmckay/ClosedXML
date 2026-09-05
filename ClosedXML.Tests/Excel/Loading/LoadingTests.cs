@@ -8,6 +8,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Point = System.Drawing.Point;
 
 namespace ClosedXML.Tests.Excel
 {
@@ -511,7 +512,7 @@ namespace ClosedXML.Tests.Excel
             using (var wb = new XLWorkbook(stream))
             {
                 var defaultColumnWidth = wb.ColumnWidth;
-                var pixelWidth = XLHelper.NoCToPixels(defaultColumnWidth, wb.Style.Font, wb);
+                var pixelWidth = XLHelper.NoCToPixels(defaultColumnWidth, wb.Format.Font, wb);
                 Assert.AreEqual(8.43, defaultColumnWidth, XLHelper.Epsilon);
                 Assert.AreEqual(64, pixelWidth);
             }
@@ -520,7 +521,7 @@ namespace ClosedXML.Tests.Excel
             using (var wb = new XLWorkbook(stream))
             {
                 var defaultColumnWidth = wb.ColumnWidth;
-                var pixelWidth = XLHelper.NoCToPixels(defaultColumnWidth, wb.Style.Font, wb);
+                var pixelWidth = XLHelper.NoCToPixels(defaultColumnWidth, wb.Format.Font, wb);
                 Assert.AreEqual(8.5, defaultColumnWidth, XLHelper.Epsilon);
                 Assert.AreEqual(56, pixelWidth);
             }

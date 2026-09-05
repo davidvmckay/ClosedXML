@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Point = System.Drawing.Point;
 
 namespace ClosedXML.Tests
 {
@@ -475,9 +476,8 @@ namespace ClosedXML.Tests
         public void KeepOriginalDrawingShapesZOrder()
         {
             // File contains shapes and a picture in a mixed order.
-            using var stream = TestHelper.GetStreamFromResource(@"Other.Pictures.ImageShapeZOrder-Input.xlsx");
-            TestHelper.CreateAndCompare(
-                () => new XLWorkbook(stream),
+            TestHelper.LoadSaveAndCompare(
+                @"Other\Pictures\ImageShapeZOrder-Input.xlsx",
                 @"Other\Pictures\ImageShapeZOrder-Output.xlsx");
         }
 

@@ -1,13 +1,11 @@
-using System;
 using System.Collections.Generic;
 using ClosedXML.Excel.Formatting;
-using ClosedXML.Utils;
 
 namespace ClosedXML.Excel;
 
 internal class FormatSlice : ISlice
 {
-    private readonly Slice<SliceValue> _slice = new();
+    private readonly Slice<XLCellFormatValue?> _slice = new();
 
     public bool IsEmpty => _slice.IsEmpty;
 
@@ -19,67 +17,68 @@ internal class FormatSlice : ISlice
 
     public IEnumerable<int> UsedRows => _slice.UsedRows;
 
-    public void Clear(XLSheetRange range)
+    public void Clear(Area area)
     {
-        _slice.Clear(range);
+        _slice.Clear(area);
     }
 
-    public void DeleteAreaAndShiftLeft(XLSheetRange rangeToDelete)
+    public void DeleteAreaAndShiftLeft(Area areaToDelete)
     {
-        _slice.DeleteAreaAndShiftLeft(rangeToDelete);
+        _slice.DeleteAreaAndShiftLeft(areaToDelete);
     }
 
-    public void DeleteAreaAndShiftUp(XLSheetRange rangeToDelete)
+    public void DeleteAreaAndShiftUp(Area areaToDelete)
     {
-        _slice.DeleteAreaAndShiftUp(rangeToDelete);
+        _slice.DeleteAreaAndShiftUp(areaToDelete);
     }
 
-    public IEnumerator<XLSheetPoint> GetEnumerator(XLSheetRange range, bool reverse = false)
+    public IEnumerator<Point> GetEnumerator(Area area, bool reverse = false)
     {
-        return _slice.GetEnumerator(range, reverse);
+        return _slice.GetEnumerator(area, reverse);
     }
 
-    public void InsertAreaAndShiftDown(XLSheetRange range)
+    public void InsertAreaAndShiftDown(Area areaToInsert)
     {
-        _slice.InsertAreaAndShiftDown(range);
+        _slice.InsertAreaAndShiftDown(areaToInsert);
     }
 
-    public void InsertAreaAndShiftRight(XLSheetRange range)
+    public void InsertAreaAndShiftRight(Area areaToInsert)
     {
-        _slice.InsertAreaAndShiftRight(range);
+        _slice.InsertAreaAndShiftRight(areaToInsert);
     }
 
-    public bool IsUsed(XLSheetPoint address)
+    public bool IsUsed(Point address)
     {
         return _slice.IsUsed(address);
     }
 
-    public void Swap(XLSheetPoint sp1, XLSheetPoint sp2)
+    public void Swap(Point sp1, Point sp2)
     {
         _slice.Swap(sp1, sp2);
     }
 
-    public void Set(XLSheetPoint point, XLStyleValue value)
+    public void Set(Point point, XLCellFormatValue? value)
     {
-        var modified = _slice[point] with { StyleValue = value };
-        _slice.Set(point, modified);
+        _slice.Set(point, value);
     }
 
-    public void Set(XLSheetPoint point, XLCellFormatValue? value)
+    internal void SetAll(Area area, XLCellFormatValue? value)
     {
-        var modified = _slice[point] with { Format = value };
-        _slice.Set(point, modified);
+        _slice.SetAll(area, value);
     }
 
-    internal XLStyleValue? GetStyleValue(XLSheetPoint point)
+    internal XLCellFormatValue? GetFormat(Point point)
     {
-        return _slice[point].StyleValue;
+        return _slice[point];
     }
 
-    internal XLCellFormatValue? GetFormat(XLSheetPoint point)
+    internal void AddUsedFormat(HashSet<XLCellFormatValue> usedCellFormats)
     {
-        return _slice[point].Format;
+        var enumerator = GetEnumerator(Area.Full);
+        while (enumerator.MoveNext())
+        {
+            if (_slice[enumerator.Current] is { } format)
+                usedCellFormats.Add(format);
+        }
     }
-
-    private readonly record struct SliceValue(XLStyleValue? StyleValue, XLCellFormatValue? Format);
 }

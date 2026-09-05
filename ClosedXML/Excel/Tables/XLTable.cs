@@ -33,9 +33,9 @@ namespace ClosedXML.Excel
         }
 
         private IXLRangeAddress _lastRangeAddress;
-        private Dictionary<String, IXLTableField> _fieldNames = null;
+        private Dictionary<String, XLTableField> _fieldNames = CreateFieldNames();
 
-        public Dictionary<String, IXLTableField> FieldNames
+        internal Dictionary<String, XLTableField> FieldNames
         {
             get
             {
@@ -53,7 +53,7 @@ namespace ClosedXML.Excel
         /// <summary>
         /// Area of the range, including headings and totals, if table has them.
         /// </summary>
-        internal XLSheetRange Area => XLSheetRange.FromRangeAddress(RangeAddress);
+        internal Area Area => Area.FromRangeAddress(RangeAddress);
 
         private void RescanFieldNames()
         {
@@ -68,9 +68,9 @@ namespace ClosedXML.Excel
                     var cellValue = cell.CachedValue;
                     var name = cellValue.ToString(CultureInfo.CurrentCulture);
 
-                    if (oldFieldNames.TryGetValue(name, out IXLTableField tableField))// && tableField.Column.ColumnNumber() == cell.Address.ColumnNumber)
+                    if (oldFieldNames.TryGetValue(name, out var tableField))// && tableField.Column.ColumnNumber() == cell.Address.ColumnNumber)
                     {
-                        (tableField as XLTableField).Index = cellPos;
+                        tableField.Index = cellPos;
                         _fieldNames.Add(name, tableField);
                         cellPos++;
                         continue;
@@ -110,20 +110,16 @@ namespace ClosedXML.Excel
             }
         }
 
-        internal void AddFields(IEnumerable<String> fieldNames)
+        internal XLTableField AddField(string fieldName)
         {
-            _fieldNames = CreateFieldNames();
-
-            Int32 cellPos = 0;
-            foreach (var name in fieldNames)
-            {
-                _fieldNames.Add(name, new XLTableField(this, name) { Index = cellPos++ });
-            }
+            var field = new XLTableField(this, fieldName) { Index = _fieldNames.Count };
+            _fieldNames.Add(fieldName, field);
+            return field;
         }
 
         internal void RenameField(String oldName, String newName)
         {
-            if (!_fieldNames.TryGetValue(oldName, out IXLTableField field))
+            if (!_fieldNames.TryGetValue(oldName, out var field))
                 throw new ArgumentException("The field does not exist in this table", "oldName");
 
             _fieldNames.Remove(oldName);
@@ -278,12 +274,19 @@ namespace ClosedXML.Excel
             return Field(GetFieldIndex(fieldName));
         }
 
-        public IXLTableField Field(Int32 fieldIndex)
+        IXLTableField IXLTable.Field(Int32 fieldIndex)
+        {
+            return Field(fieldIndex);
+        }
+
+        internal XLTableField Field(Int32 fieldIndex)
         {
             return FieldNames.Values.First(f => f.Index == fieldIndex);
         }
 
-        public IEnumerable<IXLTableField> Fields
+        IEnumerable<IXLTableField> IXLTable.Fields => Fields;
+
+        internal IEnumerable<XLTableField> Fields
         {
             get
             {
@@ -561,9 +564,9 @@ namespace ClosedXML.Excel
             }
         }
 
-        private static Dictionary<string, IXLTableField> CreateFieldNames()
+        private static Dictionary<string, XLTableField> CreateFieldNames()
         {
-            return new Dictionary<string, IXLTableField>(StringComparer.CurrentCultureIgnoreCase);
+            return new Dictionary<string, XLTableField>(StringComparer.CurrentCultureIgnoreCase);
         }
 
         private String GetUniqueName(String originalName, Int32 initialOffset, Boolean enforceOffset)
@@ -589,7 +592,7 @@ namespace ClosedXML.Excel
             // The entry in the table definition will contain \r\n
             // but the shared string value of the actual cell will contain only \n
             name = name.Replace("\r\n", "\n");
-            if (FieldNames.TryGetValue(name, out IXLTableField tableField))
+            if (FieldNames.TryGetValue(name, out var tableField))
                 return tableField.Index;
 
             throw new ArgumentOutOfRangeException("The header row doesn't contain field name '" + name + "'.");
@@ -1030,7 +1033,7 @@ namespace ClosedXML.Excel
         /// Update headers fields and totals fields by data from the cells. Do not add a new fields or names.
         /// </summary>
         /// <param name="refreshArea">Area that contains cells with changed values that might affect header and totals fields.</param>
-        internal void RefreshFieldsFromCells(XLSheetRange refreshArea)
+        internal void RefreshFieldsFromCells(Area refreshArea)
         {
             var tableArea = Area;
             if (ShowTotalsRow)
@@ -1045,7 +1048,7 @@ namespace ClosedXML.Excel
                     {
                         var fieldIndex = column - totalsRow.LeftColumn;
                         var field = Field(fieldIndex);
-                        var value = valueSlice.GetCellValue(new XLSheetPoint(totalsRowNumber, column));
+                        var value = valueSlice.GetCellValue(new Point(totalsRowNumber, column));
 
                         // Convert value to text, because Excel always converts values to text when replacing totals row.
                         field.TotalsRowLabel = value.ToString(CultureInfo.CurrentCulture);
@@ -1065,7 +1068,7 @@ namespace ClosedXML.Excel
                     {
                         var fieldIndex = column - headersRow.LeftColumn;
                         var field = Field(fieldIndex);
-                        var value = valueSlice.GetCellValue(new XLSheetPoint(headersRowNumber, column));
+                        var value = valueSlice.GetCellValue(new Point(headersRowNumber, column));
 
                         // Convert to text, because headers row of a table can be only
                         // string in OOXML and Excel converts it to string as well.

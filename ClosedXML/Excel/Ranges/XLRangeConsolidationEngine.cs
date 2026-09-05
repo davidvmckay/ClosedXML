@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -21,28 +19,37 @@ namespace ClosedXML.Excel
             _allRanges = ranges ?? throw new ArgumentNullException(nameof(ranges));
         }
 
-        public IXLRanges Consolidate()
+        public XLRanges Consolidate()
         {
-            if (!_allRanges.Any())
+            if (_allRanges.Count == 0)
                 return _allRanges;
 
-            var worksheets = _allRanges.Select(r => r.Worksheet).Distinct().OrderBy(ws => ws.Position);
+            var worksheets = _allRanges.Select<XLRange, XLWorksheet>(r => r.Worksheet).Distinct().OrderBy(ws => ws.Position);
 
-            IXLRanges retVal = new XLRanges(_workbook);
+            var retVal = new XLRanges(_workbook);
             foreach (var ws in worksheets)
             {
-                var matrix = new XLRangeConsolidationMatrix(ws, _allRanges.Where(r => r.Worksheet == ws).ToList());
+                var areaList = new XLAreaList(_allRanges.Where<XLRange>(r => r.Worksheet == ws).Select(r => r.SheetRange).ToList());
+                var matrix = new XLRangeConsolidationMatrix(areaList);
                 var consRanges = matrix.GetConsolidatedRanges();
-                foreach (var consRange in consRanges)
+                foreach (var consArea in consRanges)
                 {
-                    retVal.Add(consRange);
+                    retVal.Add(ws.Range(consArea));
                 }
             }
 
             return retVal;
         }
 
-        #region Private Classes
+        internal static XLAreaList Consolidate(XLAreaList areas)
+        {
+            if (areas.Count == 0)
+                return areas;
+
+            var matrix = new XLRangeConsolidationMatrix(areas);
+            var consRanges = matrix.GetConsolidatedRanges().ToList();
+            return new XLAreaList(consRanges);
+        }
 
         /// <summary>
         /// Class representing the area covering ranges to be consolidated as a set of bit matrices. Does all the dirty job
@@ -50,28 +57,23 @@ namespace ClosedXML.Excel
         /// </summary>
         private class XLRangeConsolidationMatrix
         {
-            #region Public Constructors
+            private readonly Dictionary<int, BitArray> _bitMatrix;
+            private readonly int _minColumn;
 
             /// <summary>
             /// Constructor.
             /// </summary>
-            /// <param name="worksheet">Current worksheet.</param>
-            /// <param name="ranges">Ranges to be consolidated. They are expected to belong to the current worksheet, no check is performed.</param>
-            public XLRangeConsolidationMatrix(IXLWorksheet worksheet, IReadOnlyCollection<IXLRange> ranges)
+            /// <param name="areas">Areas to be consolidated.</param>
+            internal XLRangeConsolidationMatrix(XLAreaList areas)
             {
-                _worksheet = worksheet;
-                PrepareBitMatrix(ranges);
-                FillBitMatrix(ranges);
+                (_bitMatrix, _minColumn) = PrepareBitMatrix(areas);
+                FillBitMatrix(areas);
             }
-
-            #endregion Public Constructors
-
-            #region Public Methods
 
             /// <summary>
             /// Get consolidated ranges equivalent to the input ones.
             /// </summary>
-            public IEnumerable<IXLRange> GetConsolidatedRanges()
+            public IEnumerable<Area> GetConsolidatedRanges()
             {
                 var rowNumbers = _bitMatrix.Keys.OrderBy(k => k).ToArray();
                 for (int i = 0; i < rowNumbers.Length; i++)
@@ -88,7 +90,7 @@ namespace ClosedXML.Excel
                         var startColumn = starting.Item1 + _minColumn - 1;
                         var endColumn = starting.Item2 + _minColumn - 1;
 
-                        yield return _worksheet.Range(startRow, startColumn, endRow, endColumn);
+                        yield return new Area(startRow, startColumn, endRow, endColumn);
 
                         while (j > i)
                         {
@@ -99,27 +101,14 @@ namespace ClosedXML.Excel
                 }
             }
 
-            #endregion Public Methods
-
-            #region Private Fields
-
-            private readonly IXLWorksheet _worksheet;
-            private Dictionary<int, BitArray> _bitMatrix;
-            private int _maxColumn = 0;
-            private int _minColumn = XLHelper.MaxColumnNumber + 1;
-
-            #endregion Private Fields
-
-            #region Private Methods
-
-            private void AddToBitMatrix(IXLRangeAddress rangeAddress)
+            private void AddToBitMatrix(Area area)
             {
                 var rows = _bitMatrix.Keys
-                    .Where(k => k >= rangeAddress.FirstAddress.RowNumber &&
-                                k <= rangeAddress.LastAddress.RowNumber);
+                    .Where(k => k >= area.TopRow &&
+                                k <= area.BottomRow);
 
-                var minIndex = rangeAddress.FirstAddress.ColumnNumber - _minColumn + 1;
-                var maxIndex = rangeAddress.LastAddress.ColumnNumber - _minColumn + 1;
+                var minIndex = area.LeftColumn - _minColumn + 1;
+                var maxIndex = area.RightColumn - _minColumn + 1;
 
                 foreach (var rowNum in rows)
                 {
@@ -138,11 +127,11 @@ namespace ClosedXML.Excel
                 }
             }
 
-            private void FillBitMatrix(IEnumerable<IXLRange> ranges)
+            private void FillBitMatrix(IEnumerable<Area> areas)
             {
-                foreach (var range in ranges)
+                foreach (var area in areas)
                 {
-                    AddToBitMatrix(range.RangeAddress);
+                    AddToBitMatrix(area);
                 }
 
                 System.Diagnostics.Debug.Assert(
@@ -161,33 +150,38 @@ namespace ClosedXML.Excel
                 }
             }
 
-            private void PrepareBitMatrix(IEnumerable<IXLRange> ranges)
+            private static (Dictionary<int, BitArray> BitMatrix, int MinColumn) PrepareBitMatrix(XLAreaList areas)
             {
-                _bitMatrix = new Dictionary<int, BitArray>();
-                foreach (var range in ranges)
+                var minColumn = XLHelper.MaxColumnNumber + 1;
+                var maxColumn = 0;
+                foreach (var area in areas)
                 {
-                    var address = range.RangeAddress;
-                    _minColumn = (_minColumn <= address.FirstAddress.ColumnNumber)
-                        ? _minColumn
-                        : address.FirstAddress.ColumnNumber;
-                    _maxColumn = (_maxColumn >= address.LastAddress.ColumnNumber)
-                        ? _maxColumn
-                        : address.LastAddress.ColumnNumber;
-
-                    if (!_bitMatrix.ContainsKey(address.FirstAddress.RowNumber))
-                        _bitMatrix.Add(address.FirstAddress.RowNumber, null);
-                    if (!_bitMatrix.ContainsKey(address.LastAddress.RowNumber))
-                        _bitMatrix.Add(address.LastAddress.RowNumber, null);
-                    if (!_bitMatrix.ContainsKey(address.LastAddress.RowNumber + 1))
-                        _bitMatrix.Add(address.LastAddress.RowNumber + 1, null);
+                    minColumn = (minColumn <= area.LeftColumn)
+                        ? minColumn
+                        : area.LeftColumn;
+                    maxColumn = (maxColumn >= area.RightColumn)
+                        ? maxColumn
+                        : area.RightColumn;
                 }
 
-                var keys = _bitMatrix.Keys.ToList();
-                foreach (var rowNum in keys)
+                var bitMaskSize = maxColumn - minColumn + 3;
+                var bitMatrix = new Dictionary<int, BitArray>();
+                foreach (var area in areas)
                 {
-                    _bitMatrix[rowNum] = new BitArray(_maxColumn - _minColumn + 3, false);
+                    AddRowBitmask(bitMatrix, area.TopRow, bitMaskSize);
+                    AddRowBitmask(bitMatrix, area.BottomRow, bitMaskSize);
+                    AddRowBitmask(bitMatrix, area.BottomRow + 1, bitMaskSize);
+                }
+
+                return (bitMatrix, minColumn);
+
+                static void AddRowBitmask(Dictionary<int, BitArray> bitMatrix, int rowNum, int bitMaskSize)
+                {
+                    if (!bitMatrix.ContainsKey(rowNum))
+                        bitMatrix.Add(rowNum, new BitArray(bitMaskSize, false));
                 }
             }
+
             private bool RowIncludesRange(BitArray rowArray, Tuple<int, int> rangeBoundaries)
             {
                 for (int i = rangeBoundaries.Item1; i <= rangeBoundaries.Item2; i++)
@@ -198,10 +192,6 @@ namespace ClosedXML.Excel
 
                 return true;
             }
-
-            #endregion Private Methods
         }
-
-        #endregion Private Classes
     }
 }

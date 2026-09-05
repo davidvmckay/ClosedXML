@@ -28,9 +28,9 @@ internal sealed class XLPivotSourceExternalWorkbook : IXLPivotSource
     /// <summary>
     /// An area in an external workbook that contains source data.
     /// </summary>
-    internal XLBookArea? Area { get; }
+    internal SheetArea? Area { get; }
 
-    internal XLPivotSourceExternalWorkbook(string relId, XLBookArea area)
+    internal XLPivotSourceExternalWorkbook(string relId, SheetArea area)
     {
         RelId = relId;
         Area = area;
@@ -42,7 +42,7 @@ internal sealed class XLPivotSourceExternalWorkbook : IXLPivotSource
         TableOrName = tableOrName;
     }
 
-    public bool TryGetSource(XLWorkbook workbook, out XLWorksheet? sheet, out XLSheetRange? sheetArea)
+    public bool TryGetSource(XLWorkbook workbook, out XLWorksheet? sheet, out Area? sheetArea)
     {
         throw new NotImplementedException("External workbook source is not supported.");
     }

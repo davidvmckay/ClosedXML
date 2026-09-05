@@ -45,11 +45,11 @@ namespace ClosedXML.Excel.CalcEngine
         /// <summary>
         /// Add an array formula to the calc engine to manage dirty tracking and evaluation.
         /// </summary>
-        internal void AddArrayFormula(XLSheetRange range, XLCellFormula arrayFormula, XLWorksheet sheet)
+        internal void AddArrayFormula(Area range, XLCellFormula arrayFormula, XLWorksheet sheet)
         {
             if (_chain is not null && _dependencyTree is not null)
             {
-                var area = new XLBookArea(sheet.Name, range);
+                var area = new SheetArea(sheet.Name, range);
                 _dependencyTree.AddFormula(area, arrayFormula, sheet.Workbook);
                 _chain.AppendArea(area);
             }
@@ -58,11 +58,11 @@ namespace ClosedXML.Excel.CalcEngine
         /// <summary>
         /// Add a formula to the calc engine to manage dirty tracking and evaluation.
         /// </summary>
-        internal void AddNormalFormula(XLBookPoint point, string sheetName, XLCellFormula formula, XLWorkbook workbook)
+        internal void AddNormalFormula(SheetPoint point, string sheetName, XLCellFormula formula, XLWorkbook workbook)
         {
             if (_chain is not null && _dependencyTree is not null)
             {
-                var pointArea = new XLBookArea(sheetName, new XLSheetRange(point.Point, point.Point));
+                var pointArea = new SheetArea(sheetName, new Area(point.Point, point.Point));
                 _dependencyTree.AddFormula(pointArea, formula, workbook);
                 _chain.AddLast(point);
             }
@@ -75,7 +75,7 @@ namespace ClosedXML.Excel.CalcEngine
         /// it is fully removed from dependency tree, but each cells referencing
         /// the formula must be removed individually from calc chain.
         /// </summary>
-        internal void RemoveFormula(XLBookPoint point, XLCellFormula formula)
+        internal void RemoveFormula(SheetPoint point, XLCellFormula formula)
         {
             if (_chain is not null && _dependencyTree is not null)
             {
@@ -94,22 +94,22 @@ namespace ClosedXML.Excel.CalcEngine
             Purge(sheet.Workbook.WorksheetsInternal);
         }
 
-        public void OnInsertAreaAndShiftDown(XLWorksheet sheet, XLSheetRange area)
+        public void OnInsertAreaAndShiftDown(XLWorksheet sheet, Area area)
         {
             Purge(sheet.Workbook.WorksheetsInternal);
         }
 
-        public void OnInsertAreaAndShiftRight(XLWorksheet sheet, XLSheetRange area)
+        public void OnInsertAreaAndShiftRight(XLWorksheet sheet, Area area)
         {
             Purge(sheet.Workbook.WorksheetsInternal);
         }
 
-        public void OnDeleteAreaAndShiftLeft(XLWorksheet sheet, XLSheetRange deletedArea)
+        public void OnDeleteAreaAndShiftLeft(XLWorksheet sheet, Area deletedArea)
         {
             Purge(sheet.Workbook.WorksheetsInternal);
         }
 
-        public void OnDeleteAreaAndShiftUp(XLWorksheet sheet, XLSheetRange deletedArea)
+        public void OnDeleteAreaAndShiftUp(XLWorksheet sheet, Area deletedArea)
         {
             Purge(sheet.Workbook.WorksheetsInternal);
         }
@@ -122,20 +122,20 @@ namespace ClosedXML.Excel.CalcEngine
             // Mark everything as dirty, because there can be stale values
             foreach (var sheet in sheets)
             {
-                sheet.Internals.CellsCollection.FormulaSlice.MarkDirty(XLSheetRange.Full);
+                sheet.Internals.CellsCollection.FormulaSlice.MarkDirty(Area.Full);
             }
         }
 
-        internal void MarkDirty(XLWorksheet sheet, XLSheetPoint point)
+        internal void MarkDirty(XLWorksheet sheet, Point point)
         {
-            MarkDirty(sheet, new XLSheetRange(point, point));
+            MarkDirty(sheet, new Area(point, point));
         }
 
-        internal void MarkDirty(XLWorksheet sheet, XLSheetRange area)
+        internal void MarkDirty(XLWorksheet sheet, Area area)
         {
             if (_dependencyTree is not null)
             {
-                var bookArea = new XLBookArea(sheet.Name, area);
+                var bookArea = new SheetArea(sheet.Name, area);
                 _dependencyTree.MarkDirty(bookArea);
             }
         }
@@ -218,7 +218,7 @@ namespace ClosedXML.Excel.CalcEngine
             _chain.Reset();
         }
 
-        private void ApplyFormula(XLCellFormula formula, XLSheetPoint appliedPoint, XLWorksheet sheet, ValueSlice valueSlice, string? recalculateSheetName)
+        private void ApplyFormula(XLCellFormula formula, Point appliedPoint, XLWorksheet sheet, ValueSlice valueSlice, string? recalculateSheetName)
         {
             var formulaText = formula.A1;
             if (formula.Type == FormulaType.Normal)
@@ -251,7 +251,7 @@ namespace ClosedXML.Excel.CalcEngine
                         var cellValue = result[rowIdx, colIdx];
                         var row = range.FirstPoint.Row + rowIdx;
                         var column = range.FirstPoint.Column + colIdx;
-                        valueSlice.SetCellValue(new XLSheetPoint(row, column), cellValue.ToCellValue());
+                        valueSlice.SetCellValue(new Point(row, column), cellValue.ToCellValue());
                     }
                 }
             }

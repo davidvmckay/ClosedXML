@@ -17,6 +17,7 @@ namespace ClosedXML.Excel
         public const int MaxRowNumber = 1048576;
         public const int MaxColumnNumber = 16384;
         public const String MaxColumnLetter = "XFD";
+        public const string LastSheetAddress = "XFD1048576";
         public const Double Epsilon = 1e-10;
 
         internal const string RefError = "#REF!";
@@ -496,7 +497,7 @@ namespace ClosedXML.Excel
         /// Calculate expected column width as a number displayed in the column in Excel from
         /// number of characters that should fit into the width and a font.
         /// </summary>
-        internal static double CalculateColumnWidth(double charWidth, IXLFont font, XLWorkbook workbook)
+        internal static double CalculateColumnWidth(double charWidth, IXLFontBase font, XLWorkbook workbook)
         {
             // Convert width as a number of characters and translate it into a given number of pixels.
             int mdw = workbook.GraphicEngine.GetMaxDigitWidth(font, workbook.DpiX).RoundToInt();

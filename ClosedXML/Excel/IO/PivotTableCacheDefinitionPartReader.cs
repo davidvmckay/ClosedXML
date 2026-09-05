@@ -82,9 +82,9 @@ namespace ClosedXML.Excel.IO
 
                 if (sheetSource.Sheet?.Value is { } sheetName &&
                     sheetSource.Reference?.Value is { } areaRef &&
-                    XLSheetRange.TryParse(areaRef.AsSpan(), out var sheetArea))
+                    Area.TryParse(areaRef.AsSpan(), out var sheetArea))
                 {
-                    var area = new XLBookArea(sheetName, sheetArea);
+                    var area = new SheetArea(sheetName, sheetArea);
                     if (sheetSource.Id?.Value is { } externalWorkbookRelId)
                         return new XLPivotSourceExternalWorkbook(externalWorkbookRelId, area);
 
@@ -192,13 +192,13 @@ namespace ClosedXML.Excel.IO
 
                 if (rangeSet.Sheet?.Value is { } sheet &&
                     rangeSet.Reference?.Value is { } reference &&
-                    XLSheetRange.TryParse(reference.AsSpan(), out var area))
+                    Area.TryParse(reference.AsSpan(), out var area))
                 {
                     return new XLPivotCacheSourceConsolidationRangeSet
                     {
                         Indexes = pageIndexes,
                         RelId = rangeSet.Id?.Value,
-                        Area = new XLBookArea(sheet, area)
+                        Area = new SheetArea(sheet, area)
                     };
                 }
 

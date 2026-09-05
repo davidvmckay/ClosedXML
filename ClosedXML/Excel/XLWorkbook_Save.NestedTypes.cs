@@ -15,40 +15,25 @@ namespace ClosedXML.Excel
 
         internal sealed class SaveContext
         {
-#if !STYLES_REWORK
-            private readonly Dictionary<XLStyleValue, StyleInfo> _sharedStyles;
-#endif
-
             public SaveContext()
             {
                 RelIdGenerator = new RelIdGenerator();
-                SharedFonts = new Dictionary<XLFontValue, FontInfo>();
-                SavedNumberFormats = new Dictionary<string, int>();
-#if !STYLES_REWORK
-                DifferentialFormats = new Dictionary<XLStyleValue, int>();
-                _sharedStyles = new Dictionary<XLStyleValue, StyleInfo>();
-#endif
                 TableId = 0;
                 TableNames = new HashSet<String>();
                 PivotSourceCacheId = 0;
             }
 
-            public RelIdGenerator RelIdGenerator { get; private set; }
-            public Dictionary<XLFontValue, FontInfo> SharedFonts { get; private set; }
+            public RelIdGenerator RelIdGenerator { get; }
 
             /// <summary>
             /// A map of number format to a number format id for saved file. It contains all number
             /// formats from the file, all number formats used in the application (styles, pivot
             /// tables, dxf) and all predefined formats.
             /// </summary>
-            public Dictionary<string, int> SavedNumberFormats { get; }
+            internal Dictionary<string, int> NumberFormatMap = new();
 
-#if !STYLES_REWORK
-            public IReadOnlyDictionary<XLStyleValue, StyleInfo> SharedStyles => _sharedStyles;
+            internal Dictionary<XLFontFormatValue, int> FontMap = new();
 
-            public Dictionary<XLStyleValue, Int32> DifferentialFormats { get; }
-
-#endif
             internal Dictionary<XLCellFormatValue, uint> FormatMap = new();
 
             internal Dictionary<XLDxfValue, uint> DxfMap = new();
@@ -76,7 +61,7 @@ namespace ClosedXML.Excel
                 var sharedStringId = SstMap[xlCell.MemorySstId];
                 if (sharedStringId < 0)
                 {
-                    throw new UnreachableException($"Unable to find text '{text}' in shared string table for cell {xlCell.SheetPoint}. " +
+                    throw new UnreachableException($"Unable to find text '{text}' in shared string table for cell {xlCell.Point}. " +
                                                    "That likely means reference counting is broken. As a stop-gap, try to set the " +
                                                    "text value to an unused cell to increase number of references for the text.");
                 }
@@ -87,67 +72,28 @@ namespace ClosedXML.Excel
             /// <summary>
             /// Get id of number format that is going to be actually saved to database.
             /// </summary>
-            internal int? GetNumberFormat(XLNumberFormatValue? numberFormat)
+            internal int? GetNumberFormatId(string? numberFormat)
             {
                 if (numberFormat is null)
                     return null;
 
-                return SavedNumberFormats[numberFormat.Format];
+                return NumberFormatMap[numberFormat];
             }
 
-            internal UInt32 GetDxfId(XLStyleValue dxf)
+            internal int GetFontId(XLFontFormatValue font)
             {
-#if STYLES_REWORK
-                throw new NotImplementedException();
-#else
-                return (UInt32)DifferentialFormats[dxf];
-#endif
+                return FontMap[font];
             }
 
-            internal uint? GetDxfId(XLDxfValue? dxf)
+            internal uint GetDxfId(XLDxfValue dxf)
             {
-                if (dxf is null)
-                    return null;
-
                 return DxfMap[dxf];
             }
 
-            internal bool TryGetDxfId(XLStyleValue dxf, out uint dxfId)
+            internal uint GetStyleId(XLCellFormatValue? format)
             {
-#if STYLES_REWORK
-                throw new NotImplementedException();
-#else
-                if (DifferentialFormats.TryGetValue(dxf, out var differentialFormatId))
-                {
-                    dxfId = (uint)differentialFormatId;
-                    return true;
-                }
-
-                dxfId = default;
-                return false;
-#endif
-            }
-
-            internal uint GetStyleId(XLStyleValue style, XLCellFormatValue? format)
-            {
-#if STYLES_REWORK
                 return format is not null ? FormatMap[format] : 0;
-#else
-                return _sharedStyles[style].StyleId;
-#endif
             }
-
-#if !STYLES_REWORK
-            internal void AddSharedStyle(XLStyleValue style, StyleInfo info)
-            {
-                _sharedStyles.Add(style, info);
-            }
-
-            internal void ClearSharedStyles()
-            {
-                _sharedStyles.Clear();
-            }
-#endif
 #nullable disable
         }
 
@@ -230,52 +176,5 @@ namespace ClosedXML.Excel
         }
 
         #endregion Nested type: RelIdGenerator
-
-        #region Nested type: FontInfo
-
-        internal struct FontInfo
-        {
-            public XLFontValue Font;
-            public UInt32 FontId;
-        };
-
-        #endregion Nested type: FontInfo
-
-#if !STYLES_REWORK
-        #region Nested type: FillInfo
-
-        internal struct FillInfo
-        {
-            public XLFillValue Fill;
-            public UInt32 FillId;
-        }
-
-        #endregion Nested type: FillInfo
-
-        #region Nested type: BorderInfo
-
-        internal struct BorderInfo
-        {
-            public XLBorderValue Border;
-            public UInt32 BorderId;
-        }
-
-        #endregion Nested type: BorderInfo
-
-        #region Nested type: StyleInfo
-
-        internal struct StyleInfo
-        {
-            public UInt32 BorderId;
-            public UInt32 FillId;
-            public UInt32 FontId;
-            public Boolean IncludeQuotePrefix;
-            public Int32 NumberFormatId;
-            public XLStyleValue Style;
-            public UInt32 StyleId;
-        }
-
-        #endregion Nested type: StyleInfo
-#endif
     }
 }
